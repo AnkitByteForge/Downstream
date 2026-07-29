@@ -1,10 +1,18 @@
 [project]
 name = "envelope-schemas"
 version = "0.1.0"
-description = "Downstream — envelope-schemas (scaffold only, no business logic implemented)."
+description = "Downstream — canonical EngineeringEventEnvelope and CommercialArtifactSnapshot contracts."
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "pydantic>=2,<3",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
 
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]

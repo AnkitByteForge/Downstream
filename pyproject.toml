@@ -1,0 +1,20 @@
+[tool.pytest.ini_options]
+# Lets `pytest` run from the repo root and resolve the cross-package
+# imports declared in each packages/*/pyproject.toml's `dependencies`
+# (e.g. domain-models importing envelope-schemas) without a full editable
+# install step. This is test tooling only — it configures no service, no
+# API, and no database, and adds no business logic.
+pythonpath = [
+    "packages/envelope-schemas/src",
+    "packages/domain-models/src",
+    "packages/event-contracts/src",
+    "packages/connector-interface/src",
+    "packages/shared-config/src",
+]
+testpaths = [
+    "packages/envelope-schemas/tests",
+    "packages/domain-models/tests",
+    "packages/event-contracts/tests",
+    "packages/connector-interface/tests",
+    "packages/shared-config/tests",
+]

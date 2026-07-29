@@ -1,10 +1,19 @@
 [project]
 name = "domain-models"
 version = "0.1.0"
-description = "Downstream — domain-models (scaffold only, no business logic implemented)."
+description = "Downstream — shared domain object model: Trigger, CommercialEvent, Impact, Action, Approval."
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "pydantic>=2,<3",
+    "envelope-schemas",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
 
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
