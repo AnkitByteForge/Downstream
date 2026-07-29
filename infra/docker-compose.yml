@@ -1,0 +1,131 @@
+version: "3.9"
+
+networks:
+  downstream-net:
+
+volumes:
+  postgres-data:
+  graph-data:
+
+services:
+  # ---------- Infrastructure ----------
+  event-bus:
+    image: bitnami/kafka:latest
+    networks: [downstream-net]
+    ports: ["9092:9092"]
+
+  operational-db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: downstream_operational
+    volumes: ["postgres-data:/var/lib/postgresql/data"]
+    networks: [downstream-net]
+
+  ledger-db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: downstream_ledger
+    networks: [downstream-net]
+
+  graph-db:
+    image: neo4j:5
+    volumes: ["graph-data:/data"]
+    networks: [downstream-net]
+
+  # ---------- Mocks (Connector Layer Validation) ----------
+  mock-engineering-system:
+    build: ./infra/mocks/mock-engineering-system
+    networks: [downstream-net]
+    ports: ["4001:4001"]
+
+  mock-erp:
+    build: ./infra/mocks/mock-erp
+    networks: [downstream-net]
+    ports: ["4002:4002"]
+
+  # ---------- Connectors (Milestone 1) ----------
+  connector-procore:
+    build: ./apps/connector-procore
+    depends_on: [event-bus, mock-engineering-system]
+    networks: [downstream-net]
+
+  connector-sap:
+    build: ./apps/connector-sap
+    depends_on: [event-bus, mock-erp]
+    networks: [downstream-net]
+
+  connector-email:
+    build: ./apps/connector-email
+    depends_on: [event-bus]
+    networks: [downstream-net]
+
+  # ---------- Connectors (stubs, opt-in only) ----------
+  connector-acc:
+    build: ./apps/connector-acc
+    profiles: ["deferred"]
+    networks: [downstream-net]
+
+  connector-oracle:
+    build: ./apps/connector-oracle
+    profiles: ["deferred"]
+    networks: [downstream-net]
+
+  connector-erpnext:
+    build: ./apps/connector-erpnext
+    profiles: ["deferred"]
+    networks: [downstream-net]
+
+  # ---------- Core services ----------
+  ingestion-service:
+    build: ./apps/ingestion-service
+    depends_on: [event-bus, operational-db]
+    networks: [downstream-net]
+
+  key-resolution-service:
+    build: ./apps/key-resolution-service
+    depends_on: [event-bus, graph-db]
+    networks: [downstream-net]
+
+  reasoning-pipeline:
+    build: ./apps/reasoning-pipeline
+    depends_on: [event-bus, graph-db, connector-sap]
+    networks: [downstream-net]
+
+  commercial-event-service:
+    build: ./apps/commercial-event-service
+    depends_on: [event-bus, operational-db]
+    networks: [downstream-net]
+
+  ledger-service:
+    build: ./apps/ledger-service
+    depends_on: [event-bus, ledger-db]
+    networks: [downstream-net]
+
+  realtime-gateway:
+    build: ./apps/realtime-gateway
+    depends_on: [event-bus]
+    ports: ["4100:4100"]
+    networks: [downstream-net]
+
+  notification-service:
+    build: ./apps/notification-service
+    depends_on: [event-bus]
+    networks: [downstream-net]
+
+  approval-service:
+    build: ./apps/approval-service
+    depends_on: [event-bus, operational-db]
+    ports: ["4200:4200"]
+    networks: [downstream-net]
+
+  synchronization-service:
+    build: ./apps/synchronization-service
+    depends_on: [event-bus, connector-sap, connector-email]
+    networks: [downstream-net]
+
+  # ---------- Frontend ----------
+  web:
+    build: ./apps/web
+    depends_on: [approval-service, realtime-gateway]
+    ports: ["3000:3000"]
+    networks: [downstream-net]

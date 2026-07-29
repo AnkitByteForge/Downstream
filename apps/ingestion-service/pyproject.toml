@@ -1,0 +1,10 @@
+[project]
+name = "ingestion-service"
+version = "0.1.0"
+description = "Downstream — ingestion-service (scaffold only, no business logic implemented)."
+requires-python = ">=3.11"
+dependencies = []
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
