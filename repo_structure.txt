@@ -1,0 +1,559 @@
+Folder PATH listing for volume OS
+Volume serial number is 00000062 E6CE:7289
+C:.
+|   .gitignore
+|   CLAUDE.md
+|   README.md
+|   repo_structure.txt
+|   
++---apps
+|   +---approval-service
+|   |   |   Dockerfile
+|   |   |   pyproject.toml
+|   |   |   README.md
+|   |   |   
+|   |   +---migrations
+|   |   |       .gitkeep
+|   |   |       
+|   |   +---src
+|   |   |   +---api
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---config
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---consumers
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---domain
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---publishers
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   \---repository
+|   |   |           .gitkeep
+|   |   |           
+|   |   \---tests
+|   |       +---contract
+|   |       |       .gitkeep
+|   |       |       
+|   |       \---unit
+|   |               .gitkeep
+|   |               
+|   +---commercial-event-service
+|   |   |   Dockerfile
+|   |   |   pyproject.toml
+|   |   |   README.md
+|   |   |   
+|   |   +---migrations
+|   |   |       .gitkeep
+|   |   |       
+|   |   +---src
+|   |   |   +---config
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---consumers
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---domain
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---publishers
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   \---repository
+|   |   |           .gitkeep
+|   |   |           
+|   |   \---tests
+|   |       +---contract
+|   |       |       .gitkeep
+|   |       |       
+|   |       \---unit
+|   |               .gitkeep
+|   |               
+|   +---connector-acc
+|   |   |   Dockerfile
+|   |   |   pyproject.toml
+|   |   |   README.md
+|   |   |   
+|   |   +---src
+|   |   |   +---client
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---config
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---idempotency
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---inbound
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   \---mapper
+|   |   |           .gitkeep
+|   |   |           
+|   |   \---tests
+|   |       \---contract
+|   |               .gitkeep
+|   |               
+|   +---connector-email
+|   |   |   Dockerfile
+|   |   |   pyproject.toml
+|   |   |   README.md
+|   |   |   
+|   |   +---src
+|   |   |   +---client
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---config
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---idempotency
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---inbound
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   \---mapper
+|   |   |           .gitkeep
+|   |   |           
+|   |   \---tests
+|   |       \---contract
+|   |               .gitkeep
+|   |               
+|   +---connector-erpnext
+|   |   |   Dockerfile
+|   |   |   pyproject.toml
+|   |   |   README.md
+|   |   |   
+|   |   +---src
+|   |   |   +---client
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---config
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---idempotency
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---inbound
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   \---mapper
+|   |   |           .gitkeep
+|   |   |           
+|   |   \---tests
+|   |       \---contract
+|   |               .gitkeep
+|   |               
+|   +---connector-oracle
+|   |   |   Dockerfile
+|   |   |   pyproject.toml
+|   |   |   README.md
+|   |   |   
+|   |   +---src
+|   |   |   +---client
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---config
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---idempotency
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---inbound
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   \---mapper
+|   |   |           .gitkeep
+|   |   |           
+|   |   \---tests
+|   |       \---contract
+|   |               .gitkeep
+|   |               
+|   +---connector-procore
+|   |   |   Dockerfile
+|   |   |   pyproject.toml
+|   |   |   README.md
+|   |   |   
+|   |   +---src
+|   |   |   +---client
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---config
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---idempotency
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---inbound
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   \---mapper
+|   |   |           .gitkeep
+|   |   |           
+|   |   \---tests
+|   |       \---contract
+|   |               .gitkeep
+|   |               
+|   +---connector-sap
+|   |   |   Dockerfile
+|   |   |   pyproject.toml
+|   |   |   README.md
+|   |   |   
+|   |   +---src
+|   |   |   +---client
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---config
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---idempotency
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---inbound
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   \---mapper
+|   |   |           .gitkeep
+|   |   |           
+|   |   \---tests
+|   |       \---contract
+|   |               .gitkeep
+|   |               
+|   +---ingestion-service
+|   |   |   Dockerfile
+|   |   |   pyproject.toml
+|   |   |   README.md
+|   |   |   
+|   |   +---migrations
+|   |   |       .gitkeep
+|   |   |       
+|   |   +---src
+|   |   |   +---config
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---consumers
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---domain
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---publishers
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   \---repository
+|   |   |           .gitkeep
+|   |   |           
+|   |   \---tests
+|   |       +---contract
+|   |       |       .gitkeep
+|   |       |       
+|   |       \---unit
+|   |               .gitkeep
+|   |               
+|   +---key-resolution-service
+|   |   |   Dockerfile
+|   |   |   pyproject.toml
+|   |   |   README.md
+|   |   |   
+|   |   +---src
+|   |   |   +---config
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---consumers
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---domain
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---publishers
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   \---repository
+|   |   |           .gitkeep
+|   |   |           
+|   |   \---tests
+|   |       +---contract
+|   |       |       .gitkeep
+|   |       |       
+|   |       \---unit
+|   |               .gitkeep
+|   |               
+|   +---ledger-service
+|   |   |   Dockerfile
+|   |   |   pyproject.toml
+|   |   |   README.md
+|   |   |   
+|   |   +---migrations
+|   |   |       .gitkeep
+|   |   |       
+|   |   +---src
+|   |   |   +---config
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---consumers
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---domain
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---publishers
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   \---repository
+|   |   |           .gitkeep
+|   |   |           
+|   |   \---tests
+|   |       +---contract
+|   |       |       .gitkeep
+|   |       |       
+|   |       \---unit
+|   |               .gitkeep
+|   |               
+|   +---notification-service
+|   |   |   Dockerfile
+|   |   |   pyproject.toml
+|   |   |   README.md
+|   |   |   
+|   |   +---src
+|   |   |   +---config
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---consumers
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---domain
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---publishers
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   \---repository
+|   |   |           .gitkeep
+|   |   |           
+|   |   \---tests
+|   |       +---contract
+|   |       |       .gitkeep
+|   |       |       
+|   |       \---unit
+|   |               .gitkeep
+|   |               
+|   +---realtime-gateway
+|   |   |   Dockerfile
+|   |   |   pyproject.toml
+|   |   |   README.md
+|   |   |   
+|   |   +---src
+|   |   |   +---api
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---config
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---consumers
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---domain
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---publishers
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   \---repository
+|   |   |           .gitkeep
+|   |   |           
+|   |   \---tests
+|   |       +---contract
+|   |       |       .gitkeep
+|   |       |       
+|   |       \---unit
+|   |               .gitkeep
+|   |               
+|   +---reasoning-pipeline
+|   |   |   Dockerfile
+|   |   |   pyproject.toml
+|   |   |   README.md
+|   |   |   
+|   |   +---migrations
+|   |   |       .gitkeep
+|   |   |       
+|   |   +---src
+|   |   |   +---config
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---consumers
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---domain
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---publishers
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   \---repository
+|   |   |           .gitkeep
+|   |   |           
+|   |   \---tests
+|   |       +---contract
+|   |       |       .gitkeep
+|   |       |       
+|   |       \---unit
+|   |               .gitkeep
+|   |               
+|   +---synchronization-service
+|   |   |   Dockerfile
+|   |   |   pyproject.toml
+|   |   |   README.md
+|   |   |   
+|   |   +---migrations
+|   |   |       .gitkeep
+|   |   |       
+|   |   +---src
+|   |   |   +---config
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---consumers
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---domain
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   +---publishers
+|   |   |   |       .gitkeep
+|   |   |   |       
+|   |   |   \---repository
+|   |   |           .gitkeep
+|   |   |           
+|   |   \---tests
+|   |       +---contract
+|   |       |       .gitkeep
+|   |       |       
+|   |       \---unit
+|   |               .gitkeep
+|   |               
+|   \---web
+|       |   Dockerfile
+|       |   README.md
+|       |   
+|       +---public
+|       |       .gitkeep
+|       |       
+|       \---src
+|           +---api-client
+|           |       .gitkeep
+|           |       
+|           +---components
+|           |       .gitkeep
+|           |       
+|           +---pages
+|           |   +---commercial-state
+|           |   |       .gitkeep
+|           |   |       
+|           |   +---event-detail
+|           |   |       .gitkeep
+|           |   |       
+|           |   +---event-inbox
+|           |   |       .gitkeep
+|           |   |       
+|           |   +---integrations
+|           |   |       .gitkeep
+|           |   |       
+|           |   +---project-graph
+|           |   |       .gitkeep
+|           |   |       
+|           |   +---settings
+|           |   |       .gitkeep
+|           |   |       
+|           |   \---timeline
+|           |           .gitkeep
+|           |           
+|           \---realtime
+|                   .gitkeep
+|                   
++---docs
+|   |   01_Downstream_The_Company.md
+|   |   02_Downstream_Product_Design.md
+|   |   03_Downstream_Systems_Architecture.md
+|   |   04_Downstream_Connector_Layer_Validation.md
+|   |   05_Downstream_Reference_Execution_Trace.md
+|   |   06_Downstream_Implementation_Backlog.md
+|   |   07_Downstream_Implementation_Blueprint.md
+|   |   
+|   \---architecture
+|           mermaid-ai-diagram-2026-07-29-120448.png
+|           
++---infra
+|   |   docker-compose.yml
+|   |   
+|   +---migrations
+|   |       .gitkeep
+|   |       README.md
+|   |       
+|   \---mocks
+|       +---mock-engineering-system
+|       |   |   Dockerfile
+|       |   |   README.md
+|       |   |   
+|       |   \---src
+|       |           .gitkeep
+|       |           
+|       \---mock-erp
+|           |   Dockerfile
+|           |   README.md
+|           |   
+|           \---src
+|                   .gitkeep
+|                   
+\---packages
+    +---connector-interface
+    |   |   pyproject.toml
+    |   |   README.md
+    |   |   
+    |   +---src
+    |   |       .gitkeep
+    |   |       
+    |   \---tests
+    |           .gitkeep
+    |           
+    +---domain-models
+    |   |   pyproject.toml
+    |   |   README.md
+    |   |   
+    |   +---src
+    |   |       .gitkeep
+    |   |       
+    |   \---tests
+    |           .gitkeep
+    |           
+    +---envelope-schemas
+    |   |   pyproject.toml
+    |   |   README.md
+    |   |   
+    |   +---src
+    |   |       .gitkeep
+    |   |       
+    |   \---tests
+    |           .gitkeep
+    |           
+    +---event-contracts
+    |   |   pyproject.toml
+    |   |   README.md
+    |   |   
+    |   +---src
+    |   |       .gitkeep
+    |   |       
+    |   \---tests
+    |           .gitkeep
+    |           
+    \---shared-config
+        |   pyproject.toml
+        |   README.md
+        |   
+        +---src
+        |       .gitkeep
+        |       
+        \---tests
+                .gitkeep
+                
