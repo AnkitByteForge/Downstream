@@ -1,6 +1,6 @@
 # Downstream — Implementation Status
 
-**Last updated:** 2026-07-31
+**Last updated:** 2026-07-31 (RES-1)
 **Purpose of this document:** a single reference for exactly what has been built so far, in what order, and why — so any future session (human or agent) can pick up work without re-deriving decisions already made. This file is a living status record, not a frozen design document; it does not belong in `/docs` and carries no architectural authority of its own. If it ever disagrees with `/docs`, `/docs` wins.
 
 ---
@@ -29,6 +29,10 @@ Every decision below traces back to the seven frozen documents in `/docs`, read 
 | `49a12f8` | **Repository initialization** — created the full monorepo folder structure per the blueprint. No logic. |
 | `84823f0` | Made directly by the user (not by this assistant) — added `repo_structure.txt` at the repo root. Not reviewed or incorporated into the work below. |
 | `8e05eef` | **Milestone 0** — implemented and tested the five `packages/` shared contracts. |
+| `37b29c4` | Made directly by the user — added the four `docs/reference/*` documents and renamed the two mock scaffold folders to `infra/mocks/Reference Engineering System/` and `infra/mocks/Reference Commercial System/` (docker-compose.yml's build paths were not updated to match at the time). |
+| `90dd7c5` | Made directly by the user — added this document. |
+| `cf6683e` | Made directly by the user — added `docs/adr/ADR-001.md` (Reference Engineering System includes a web UI) and `docs/adr/ADR-002.md` (implementation directories use kebab-case; document titles unchanged). |
+| *(this commit)* | **Reference Engineering System — RES-1.** See §10 below. |
 
 ---
 
@@ -37,11 +41,13 @@ Every decision below traces back to the seven frozen documents in `/docs`, read 
 | Layer | Status |
 |---|---|
 | `docs/` | Frozen, unmodified, source of truth |
-| `apps/*` (16 services) | **Scaffold only** — folder structure, placeholder README/Dockerfile/pyproject.toml. Zero business logic, zero APIs, zero database code. |
-| `packages/*` (5 packages) | **Implemented** — real, tested Pydantic models and an ABC. This is Milestone 0. |
-| `infra/` | Scaffold only — `docker-compose.yml` matches the blueprint exactly; `migrations/` and `mocks/` are empty placeholders. |
-| Tests | 201 unit tests, all passing, covering only `packages/*` |
-| Milestone (per blueprint §9) | Milestone 0 complete. Milestones 1–5 not started. |
+| `apps/*` (16 services) | **Scaffold only** — folder structure, placeholder README/Dockerfile/pyproject.toml. Zero business logic, zero APIs, zero database code. This is Downstream's own service mesh — untouched by RES-1. |
+| `packages/*` (5 packages) | **Implemented** — real, tested Pydantic models and an ABC. This is Milestone 0 (Downstream's own shared contracts — not used by the Reference Engineering System, see §10.1). |
+| `infra/` | `docker-compose.yml` now wires the Reference Engineering System's three containers (db/backend/frontend); every other service entry is still scaffold-only, matching the blueprint. `mocks/Reference Engineering System/` was removed — superseded by `reference-systems/reference-engineering-system/` (see §10). `mocks/Reference Commercial System/` remains an empty placeholder. |
+| `reference-systems/reference-engineering-system/` | **RES-1 implemented** — FastAPI backend (Clean Architecture) + Next.js frontend, both real, both tested, both containerized and verified end to end. See §10. |
+| Tests | 201 `packages/*` unit tests (unchanged) + 20 new Reference Engineering System backend tests (unit + application + architecture-boundary), all passing. Frontend: build + typecheck + lint clean; no automated frontend tests yet (Playwright suite is RES-5 scope). |
+| Downstream Milestone (per blueprint §9) | Milestone 0 complete. Milestones 1–5 not started — unaffected by this phase. |
+| Reference Engineering System Milestone (per Plan v2 §17) | **RES-1 complete.** RES-2 through RES-5 not started. |
 
 ---
 
@@ -181,7 +187,9 @@ Each package's own `pyproject.toml` was also updated from the Phase 1 placeholde
 - **No event bus wiring** — Kafka is declared in `docker-compose.yml` but nothing publishes or consumes from it yet.
 - **No connector adapter logic** — `connector-procore`, `connector-sap`, `connector-email` have no `inbound/client/mapper/idempotency` code; the three deferred connectors (`connector-acc`, `connector-oracle`, `connector-erpnext`) remain stubs by design.
 - **No frontend** — `apps/web` has no actual page code, just the route-stub folder structure.
-- **No mocks running** — `mock-engineering-system` and `mock-erp` have empty `src/`.
+- **No mocks running** — `mock-erp` still has empty `src/`. (`mock-engineering-system` no longer exists as a concept — superseded by the Reference Engineering System, §10.)
+
+This section describes **Downstream's own** `apps/*`/`packages/*` only. The separate `reference-systems/reference-engineering-system/` subsystem has its own implementation status — see §10.9.
 
 ---
 
@@ -222,3 +230,120 @@ git log --oneline
 ## 9. Open item
 
 `repo_structure.txt` (root of the repo, 559 lines) was added directly by the user in commit `84823f0`. It has not been read or reconciled against anything in this document or in `/docs`. Flagging here so it isn't silently forgotten.
+
+---
+
+## 10. Phase 3 — Reference Engineering System: RES-1
+
+**Task given:** implement RES-1 of the approved Reference Engineering System Implementation Plan v2 — a Clean Architecture FastAPI backend and a Next.js frontend, covering Project/Discipline/Location/SpecSection/Drawing/DrawingVersion/RFI, integration OAuth2 + human session auth, seed data reproducing the Reference Execution Trace's Meridian Tower/RFI-214 scenario, and the Login/Dashboard/Project Explorer/RFI Register/RFI Detail pages. Plan v2 itself was revised from v1 per explicit instruction to treat this system as a full enterprise application (not a mock), with a Next.js frontend and strict Domain/Application/Infrastructure/API/Presentation separation — see the conversation history for the full plan text; it is not duplicated here.
+
+This system is **not** a Downstream service. It plays the role of the external system (Procore/ACC-shaped) that a future `connector-procore` will connect into. It shares no code with `packages/*` or `apps/*` by design (§10.1).
+
+### 10.1 Where it lives, and why
+
+`reference-systems/reference-engineering-system/{backend,frontend}/` — a new top-level directory, sibling to `apps/`, `packages/`, `infra/`. Originally scaffolded under `infra/mocks/mock-engineering-system/` per the Blueprint, then renamed by the user to `infra/mocks/Reference Engineering System/` (commit `37b29c4`) alongside the four new reference docs. Relocated again here per the user's explicit approval of Plan v2 §22.1: *"The system is no longer considered a mock."* `infra/mocks/Reference Engineering System/` (the old scaffold — Dockerfile/README/`.gitkeep` only, no logic) was deleted as part of this move; nothing of substance was lost.
+
+Directory name is kebab-case per `docs/adr/ADR-002.md`; the reference document it implements keeps its title-case name (`docs/reference/The Reference Engineering System.md`) unchanged, per that same ADR.
+
+Deliberately **zero dependency** on `packages/*`: those packages define Downstream's internal canonical wire shapes (`EngineeringEventEnvelope`, etc.). This system must produce *raw, vendor-shaped* payloads (Procore's own `id`/`display_number`/`status` shape) — translating raw→envelope is the future Connector-Procore adapter's job. If this system imported `envelope-schemas`, it would silently do the adapter's job for it, defeating the "swap the mock for real Procore, zero Reasoning Engine changes" guarantee `docs/04` is built around.
+
+### 10.2 Backend — Clean Architecture, four layers
+
+```
+backend/src/
+├── domain/          # entities (dataclasses), value objects, state machines, repository ports (ABCs), exceptions
+│                     # zero imports of fastapi/sqlalchemy/httpx/jwt — enforced by tests/architecture/
+├── application/      # use cases, DTOs, outbound ports (clock, password hasher, token service)
+│                     # imports only domain — same enforcement
+├── infrastructure/   # SQLAlchemy ORM models + repositories, OAuth2 + session auth, config, db session
+└── api/              # FastAPI routers (thin — call exactly one use case each), Pydantic schemas, deps.py (composition root)
+```
+
+Entities implemented: `Project`, `Discipline`, `Location` (recursive tree), `SpecDivision`, `SpecSection`, `Drawing`, `DrawingVersion` (with `RevisionCloud` value objects), `RFI` (with `BallInCourt` value object), `User`, `IntegrationUser`, `OAuthClient`, `OAuthToken`.
+
+State machines (pure functions in `domain/state_machines/`, `dataclasses.replace`-based, no mutation):
+- **RFI**: `DRAFT → OPEN(BIC=assignee) → RESPONDED(BIC=manager) → CLOSED`, matching `docs/reference/The Reference Engineering System.md` §16 exactly. `close_rfi` also accepts a direct `OPEN → CLOSED` transition carrying its own response text, because the Reference Trace's own scenario closes RFI-214 in one step alongside its response — the formal `RESPONDED` intermediate exists but isn't mandatory.
+- **DrawingVersion**: `DRAFT → ISSUED → REVISED → SUPERSEDED`, per the same doc.
+
+Both are covered by `tests/unit/domain/` — every legal transition, every illegal one raises `InvalidTransition`, business-rule violations (e.g. closing with no response) raise `DomainRuleViolation`.
+
+### 10.3 Two distinct auth surfaces (as scoped in Plan v2 §10)
+
+1. **Integration-client OAuth2** (`infrastructure/auth/`, `api/v1/oauth.py`) — `authorization_code` and `refresh_token` grants, opaque bearer tokens (not JWT), single-use seeded authorization codes. Models the real Procore posture from `docs/04`.
+2. **Human-user session** (`api/v1/auth.py`) — httpOnly JWT cookie (`res_session`), issued on `POST /auth/login`, verified per-request. Four roles seeded, taken directly from `docs/reference/The Reference Engineering System.md` §1's "Role division observed in practice": `PROJECT_MANAGER`, `PROJECT_ENGINEER`, `SUBCONTRACTOR`, `ARCHITECT_ENGINEER_OF_RECORD`, plus `ADMIN`.
+
+Both resolve to one `ActingContext` union type (`api/deps.py`) so every router asks exactly one question — `ctx.can_see(resource_type)` — regardless of which auth surface answered it.
+
+**Verified behavior, not just implemented:** a partially-scoped integration credential (seeded scope `["rfis","submittals","documents"]`, matching the Reference Trace Phase 1.2's `partial:[rfis,submittals,documents]` literally) gets a **silently empty list**, not a 403, when it queries `spec_sections` — confirmed by live `curl` against a running instance, not just asserted in a unit test. This is the specific behavior `docs/04` calls out as the highest-value thing to get right: *"a partially-scoped integration user will silently return incomplete data rather than erroring."*
+
+### 10.4 Database
+
+PostgreSQL 16, Alembic, 4 migrations (`0001` core project structure → `0002` users/OAuth2 → `0003` drawings → `0004` RFIs — reordered from Plan v2's original 1/2/3/4 grouping because `RFI.ball_in_court_user_id` FKs to `users.id`, so auth had to move before RFIs; noted here as the one deviation from the plan's literal migration order, made for a concrete FK-dependency reason, not a scope change).
+
+**Verified, not assumed:** all four migrations applied cleanly to a brand-new Postgres 16 instance (both an ad-hoc container and, separately, the actual `docker-compose` `reference-engineering-db` service); the resulting schema's table set was diffed programmatically against the SQLAlchemy `Base.metadata` and found to match exactly (only the expected `alembic_version` bookkeeping table differs).
+
+### 10.5 Seed data
+
+`backend/src/seed/meridian_tower.py` reproduces `docs/05_Downstream_Reference_Execution_Trace.md` field-for-field: Project "Meridian Tower", Discipline M, Location tree (Site → Building → Level 4 → Grid B-4), SpecSection `23 31 13`, Drawing `M-2.1` with Rev B (superseded) and Rev C (current, revision-clouded, exact description *"Duct DN200 rerouted 0.6m south of Beam B-14"*), and RFI-214 itself — closed at the trace's literal timestamp (`2026-07-28T09:14:03Z`) with the trace's literal response text. The RFI is seeded through its real state machine (`open_rfi → respond_to_rfi → close_rfi`), not inserted pre-closed, so the seed script doubles as an integration exercise of the domain layer. Five `User` rows (one per role) and two `IntegrationUser` + `OAuthClient` pairs (full-scope and partial-scope) are included so the frontend's Login page and the OAuth flow both have real accounts to run against — this is beyond what the trace itself specifies, added because Plan v2's frontend requires real login accounts to be demoable.
+
+**Verified end to end** (live `curl` session against a running instance, both locally and inside the Docker Compose stack): login → `GET /rest/v1.0/projects/1/rfis/1` returns the exact trace-shaped payload; `POST /oauth/token` with `grant_type=authorization_code` issues a real token pair and the code is provably single-use (a second exchange attempt returns 400); the drawing revision timeline endpoint returns Rev B (`SUPERSEDED`, pointing at Rev C) and Rev C (`REVISED`, carrying the seeded revision cloud) in issuance order.
+
+### 10.6 Frontend
+
+Next.js 16 (App Router, Turbopack), TypeScript, Tailwind CSS v4, shadcn/ui — scaffolded via `create-next-app`/`shadcn init` rather than hand-rolled, so the tooling itself matches current upstream conventions rather than this assistant's training-data assumptions about Next.js (the installed version's own `AGENTS.md` warns training data may be stale for breaking API changes; its bundled docs were read before writing any page).
+
+Pages: `/login`, `/dashboard`, `/projects` (Project Explorer), `/projects/[projectId]/rfis` (RFI Register), `/projects/[projectId]/rfis/[rfiId]` (RFI Detail) — exactly Plan v2 §17's RES-1 scope, no more, no less. Drawing Register/Detail/Timeline, Submittal Register, Specification Browser, Location Hierarchy, and Activity Feed are explicitly deferred to RES-2/RES-3/RES-4 per the approved milestone table, even though the backend already exposes enough (`documents`, `documents/{id}/versions`) to build some of them now — resisted per the plan's own discipline against building ahead of the milestone that calls for it.
+
+Every page is a client component calling the backend's own REST API with `credentials: "include"` (`src/lib/api-client/`) — no bypass, no fabricated data. Auth state is never cached client-side; every protected page asks the backend's `GET /auth/session` on mount and redirects to `/login` on a 401 (`src/lib/auth/use-session.ts`).
+
+**One backend addition beyond the original plan**, made while building the RFI Detail page: `GET /rest/v1.0/projects/{project_id}/documents/versions/{version_id}` — RFIs reference `DrawingVersion` IDs directly (per `docs/04`'s split `item_id`/`version_id` requirement), but the originally-planned document endpoints only supported listing versions *by drawing*, with no way to resolve a single cited version back to its sheet/revision label. This is a genuine gap discovered during implementation, not a scope expansion — the `GetDrawingVersion` use case already existed from RES-1's own domain/application layers, this only added the missing route.
+
+**Verified:** `npm run build`, `npm run lint`, and TypeScript all pass clean. The login page's real HTML shell (title, form, seeded demo-password hint) was confirmed via direct HTTP request against a running dev server, and again against the containerized production build. Full interactive browser click-through (Playwright) was **not** performed — that's explicitly RES-5 scope in the approved plan, not RES-1.
+
+### 10.7 Docker Compose
+
+`infra/docker-compose.yml` gained three services: `reference-engineering-db` (Postgres 16, dedicated volume), `reference-engineering-backend` (port 8000), `reference-engineering-frontend` (port 3100, standalone Next.js build). `connector-procore`'s `depends_on` was updated to point at `reference-engineering-backend` instead of the now-deleted `mock-engineering-system`.
+
+**A pre-existing, repo-wide bug was discovered and fixed while verifying this:** every build path in `docker-compose.yml` (`./apps/connector-procore`, etc.) is written relative to the repo root, but Compose resolves build contexts relative to the *compose file's own directory* (`infra/`) unless `--project-directory` is passed explicitly. This means `docker compose -f infra/docker-compose.yml up` — the exact command the root `README.md` has documented since commit `49a12f8` — has never actually worked for any of the 16 pre-existing service definitions, not just the new ones. Fixed by documenting `--project-directory .` in `README.md`'s run instructions; `docker compose config` was used to confirm every path (old and new) now resolves correctly. No service definitions were rewritten — this was a one-line invocation fix, not a path-by-path rewrite.
+
+**Verified against the actual containers, not just `config`:** built both images, brought up all three services via `docker compose ... up -d`, ran `alembic upgrade head` and the seed script *inside* the running backend container, then confirmed login + the full RFI-214 fetch from the host machine against the containerized backend, and confirmed the frontend container serves `/login` with a 200. All three containers were stopped (not removed) afterward.
+
+**Known, pre-existing, out-of-scope issue left as-is:** `mock-erp`'s build path (`./infra/mocks/mock-erp`) is also stale — the folder was renamed to `infra/mocks/Reference Commercial System/` in commit `37b29c4` without updating `docker-compose.yml`. Not fixed here because Commercial System work is an explicit non-goal of this phase; flagged in both `docker-compose.yml` itself (inline comment) and here so it isn't silently forgotten.
+
+### 10.8 Testing
+
+20 new backend tests, all passing, run alongside the existing 201 `packages/*` tests (root `pyproject.toml` unaffected — this system has its own separate `pyproject.toml`/`pytest` config, not merged into the root one, since it's a fully independent subsystem):
+- `tests/unit/domain/` — RFI and DrawingVersion state machine transitions, `PermissionScope` scoping logic.
+- `tests/unit/application/` — use cases tested against in-memory fake repositories (`tests/unit/application/fakes.py`), zero database — proving the port/adapter split actually buys the testability Clean Architecture is supposed to buy, not just adding layers for their own sake.
+- `tests/architecture/test_layer_boundaries.py` — parses every `.py` file under `domain/` and `application/` with `ast` and asserts none of them import `fastapi`, `sqlalchemy`, `httpx`, `jwt`, or `api`/`infrastructure` — "business rules must never depend on FastAPI" as a checked fact, per your explicit instruction, not a convention someone could accidentally violate later.
+
+### 10.9 What is explicitly NOT implemented yet (RES-2 through RES-5)
+
+- **Webhook dispatch** — no thin-payload webhook fires on RFI close yet (RES-2).
+- **Rate limiting and pagination** (`X-Total`, `per_page`) — not implemented (RES-2).
+- **Submittals, Vendor/Commitment, procurement-gate enforcement** — not implemented (RES-3).
+- **DesignChange (ASI/Bulletin/CCD/ChangeOrder), ChangeEvent/PCO/COR, FieldIssue, ClashItem, Transmittal** — not implemented (RES-4).
+- **ScheduleActivity, ModelObject** — not implemented (RES-5).
+- **Drawing Register/Detail/Revision Timeline, Submittal Register, Specification Browser, Location Hierarchy, Activity Feed pages** — backend groundwork exists for some (documents, spec_sections, locations), frontend pages deferred per plan (RES-2 through RES-4).
+- **Playwright e2e suite** — RES-5.
+- **`tests/contract/`** (the docs/04-mandated behavioral fidelity suite — thin webhook shape, 429 on rate limit) — depends on webhook dispatch and rate limiting existing first (RES-2/RES-3).
+
+### 10.10 How to verify this state yourself
+
+```bash
+cd reference-systems/reference-engineering-system/backend
+python -m venv .venv && .venv/Scripts/pip install -e ".[dev]"
+# point RES_DATABASE_URL at a running Postgres, then:
+.venv/Scripts/python -m alembic upgrade head
+.venv/Scripts/python -m pytest -q
+# expected: 20 passed
+```
+
+```bash
+# from the repo root
+docker compose -f infra/docker-compose.yml --project-directory . up -d --build reference-engineering-db reference-engineering-backend reference-engineering-frontend
+docker exec <backend-container> python -m alembic upgrade head
+docker exec <backend-container> python -m seed.run_seed
+curl http://localhost:8000/health
+curl http://localhost:3100/login
+```

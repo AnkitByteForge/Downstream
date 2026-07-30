@@ -6,6 +6,7 @@ networks:
 volumes:
   postgres-data:
   graph-data:
+  reference-engineering-db-data:
 
 services:
   # ---------- Infrastructure ----------
@@ -33,20 +34,54 @@ services:
     networks: [downstream-net]
 
   # ---------- Mocks (Connector Layer Validation) ----------
-  mock-engineering-system:
-    build: ./infra/mocks/mock-engineering-system
-    networks: [downstream-net]
-    ports: ["4001:4001"]
-
+  # mock-engineering-system has been superseded: the Reference Engineering
+  # System is no longer a thin mock (ADR-001) and now lives under
+  # reference-systems/reference-engineering-system/ (ADR-002 / plan v2 §22.1),
+  # wired below under "Reference Engineering System". connector-procore will
+  # depend on reference-engineering-backend once it is actually built.
+  #
+  # mock-erp's build path (./infra/mocks/mock-erp) is stale — the folder was
+  # renamed to infra/mocks/Reference Commercial System in a prior commit
+  # without updating this file. Left as-is: fixing it belongs to the future
+  # Commercial System phase, not this milestone; flagged here so it isn't
+  # silently forgotten.
   mock-erp:
     build: ./infra/mocks/mock-erp
     networks: [downstream-net]
     ports: ["4002:4002"]
 
+  # ---------- Reference Engineering System (own subsystem, not a Downstream service) ----------
+  reference-engineering-db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: res
+      POSTGRES_PASSWORD: res
+      POSTGRES_DB: reference_engineering
+    volumes: ["reference-engineering-db-data:/var/lib/postgresql/data"]
+    networks: [downstream-net]
+
+  reference-engineering-backend:
+    build: ./reference-systems/reference-engineering-system/backend
+    environment:
+      RES_DATABASE_URL: postgresql+psycopg://res:res@reference-engineering-db:5432/reference_engineering
+      RES_JWT_SECRET: dev-secret-change-me
+      RES_CORS_ORIGINS: '["http://localhost:3100"]'
+    depends_on: [reference-engineering-db]
+    ports: ["8000:8000"]
+    networks: [downstream-net]
+
+  reference-engineering-frontend:
+    build: ./reference-systems/reference-engineering-system/frontend
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
+    depends_on: [reference-engineering-backend]
+    ports: ["3100:3000"]
+    networks: [downstream-net]
+
   # ---------- Connectors (Milestone 1) ----------
   connector-procore:
     build: ./apps/connector-procore
-    depends_on: [event-bus, mock-engineering-system]
+    depends_on: [event-bus, reference-engineering-backend]
     networks: [downstream-net]
 
   connector-sap:

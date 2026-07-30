@@ -1,0 +1,33 @@
+[project]
+name = "reference-engineering-system"
+version = "0.1.0"
+description = "Reference Engineering System — a vendor-neutral, Procore/ACC-realistic construction engineering platform. Produces the raw engineering events Downstream will later consume."
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115,<1",
+    "uvicorn[standard]>=0.30",
+    "sqlalchemy>=2.0,<3",
+    "alembic>=1.13,<2",
+    "psycopg[binary]>=3.1,<4",
+    "pydantic>=2,<3",
+    "pydantic-settings>=2.4,<3",
+    "pyjwt>=2.9,<3",
+    "python-multipart>=0.0.9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8,<9",
+    "httpx>=0.27,<1",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"

@@ -64,16 +64,24 @@ downstream/
 │   ├── docker-compose.yml
 │   ├── migrations/
 │   └── mocks/
-│       ├── mock-engineering-system/
-│       └── mock-erp/
+│       └── Reference Commercial System/   # mock SAP/Oracle — not yet implemented
+├── reference-systems/
+│   └── reference-engineering-system/      # backend (FastAPI) + frontend (Next.js) —
+│                                           # see its own README; not a Downstream service,
+│                                           # it's the external system Downstream connects into
 └── docs/                    # the frozen design documents
 ```
 
 ## Running
 
 ```
-docker compose -f infra/docker-compose.yml up
+docker compose -f infra/docker-compose.yml --project-directory . up
 ```
+
+`--project-directory .` is required: Compose resolves every service's build
+context relative to the project directory, not the compose file's own
+location, and this file lives in `infra/` while every build path is written
+relative to the repo root.
 
 Deferred connectors (`connector-acc`, `connector-oracle`, `connector-erpnext`)
 are declared under the `deferred` Compose profile and are not started by
