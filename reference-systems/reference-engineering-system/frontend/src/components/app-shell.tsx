@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, FolderKanban, FileQuestion, LogOut } from "lucide-react";
+import { LayoutDashboard, FolderKanban, FileQuestion, FileStack, Activity, LogOut } from "lucide-react";
 
 import { authApi, type SessionOut } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
@@ -82,6 +82,18 @@ export function AppShell({ session, projectId, children }: AppShellProps) {
                 icon={FileQuestion}
                 label="RFIs"
                 active={pathname.startsWith(`/projects/${projectId}/rfis`)}
+              />
+              <NavLink
+                href={`/projects/${projectId}/drawings`}
+                icon={FileStack}
+                label="Drawings"
+                active={pathname.startsWith(`/projects/${projectId}/drawings`)}
+              />
+              <NavLink
+                href={`/projects/${projectId}/activity`}
+                icon={Activity}
+                label="Activity"
+                active={pathname.startsWith(`/projects/${projectId}/activity`)}
               />
             </>
           )}

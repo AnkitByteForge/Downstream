@@ -40,11 +40,13 @@ services:
   # wired below under "Reference Engineering System". connector-procore will
   # depend on reference-engineering-backend once it is actually built.
   #
-  # mock-erp's build path (./infra/mocks/mock-erp) is stale — the folder was
-  # renamed to infra/mocks/Reference Commercial System in a prior commit
-  # without updating this file. Left as-is: fixing it belongs to the future
-  # Commercial System phase, not this milestone; flagged here so it isn't
-  # silently forgotten.
+  # mock-erp's build path is stale on two counts: paths in this file resolve
+  # relative to infra/ (this file's own directory — confirmed by commit
+  # d2c58b3's fix to the reference-engineering-* paths below), so the
+  # correct path would be ./mocks/Reference Commercial System, not
+  # ./infra/mocks/mock-erp (wrong nesting *and* wrong, pre-rename name).
+  # Left as-is: fixing it belongs to the future Commercial System phase, not
+  # this milestone; flagged here so it isn't silently forgotten.
   mock-erp:
     build: ./infra/mocks/mock-erp
     networks: [downstream-net]

@@ -4,6 +4,7 @@ from .project import Discipline, Project
 from .rfi import RFI
 from .spec import SpecDivision, SpecSection
 from .user import IntegrationUser, OAuthClient, OAuthToken, User
+from .webhook import WebhookDelivery, WebhookSubscription
 
 __all__ = [
     "Drawing",
@@ -18,4 +19,6 @@ __all__ = [
     "OAuthClient",
     "OAuthToken",
     "User",
+    "WebhookDelivery",
+    "WebhookSubscription",
 ]

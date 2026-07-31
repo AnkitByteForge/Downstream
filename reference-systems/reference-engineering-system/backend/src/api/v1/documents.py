@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from api.deps import (
     ActingContext,
@@ -10,6 +10,7 @@ from api.deps import (
     get_list_drawing_versions,
     get_list_drawings,
 )
+from api.pagination import PageParams, paginate
 from api.schemas.drawing import DrawingOut, DrawingVersionOut, RevisionCloudOut
 from application.exceptions import NotFound
 from application.use_cases.drawing_use_cases import (
@@ -39,12 +40,17 @@ def _version_out(v) -> DrawingVersionOut:
 @router.get("/projects/{project_id}/documents", response_model=list[DrawingOut])
 def list_documents(
     project_id: int,
+    response: Response,
     use_case: ListDrawings = Depends(get_list_drawings),
     ctx: ActingContext = Depends(get_acting_context),
+    page_params: PageParams = Depends(),
 ) -> list[DrawingOut]:
     if not ctx.can_see("documents"):
+        response.headers["X-Total"] = "0"
         return []
-    return [DrawingOut(**vars(d)) for d in use_case.execute(project_id)]
+    page, total = paginate(use_case.execute(project_id), page_params)
+    response.headers["X-Total"] = str(total)
+    return [DrawingOut(**vars(d)) for d in page]
 
 
 @router.get("/projects/{project_id}/documents/{drawing_id}", response_model=DrawingOut)
@@ -54,8 +60,7 @@ def get_document(
     use_case: GetDrawing = Depends(get_get_drawing),
     ctx: ActingContext = Depends(get_acting_context),
 ) -> DrawingOut:
-    if not ctx.can_see("documents"):
-        raise HTTPException(status.HTTP_404_NOT_FOUND)
+    ctx.require_scope("documents")
     try:
         return DrawingOut(**vars(use_case.execute(drawing_id)))
     except NotFound as exc:
@@ -89,8 +94,7 @@ def get_document_version(
 ) -> DrawingVersionOut:
     """Resolves a single version by its own id — needed because RFIs and other
     referencing entities cite a DrawingVersion directly, not its parent Drawing."""
-    if not ctx.can_see("documents"):
-        raise HTTPException(status.HTTP_404_NOT_FOUND)
+    ctx.require_scope("documents")
     try:
         return _version_out(use_case.execute(version_id))
     except NotFound as exc:

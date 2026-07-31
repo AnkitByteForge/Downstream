@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from datetime import timedelta
+
 from fastapi import Cookie, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from application.exceptions import Unauthorized
-from application.ports import PasswordHasherPort, SessionTokenServicePort
+from application.ports import PasswordHasherPort, SessionTokenServicePort, WebhookDispatcherPort
 from application.use_cases.auth_use_cases import LoginUser
 from application.use_cases.drawing_use_cases import (
     GetDrawing,
@@ -20,12 +22,17 @@ from application.use_cases.oauth_use_cases import IssueTokenFromAuthorizationCod
 from application.use_cases.project_use_cases import GetProject, ListProjects
 from application.use_cases.rfi_use_cases import CloseRFI, GetRFI, ListRFIs, RespondToRFI
 from application.use_cases.spec_use_cases import ListSpecDivisions, ListSpecSections
+from application.use_cases.webhook_use_cases import (
+    ListActivity,
+    ListWebhookSubscriptions,
+    RegisterWebhookSubscription,
+)
 from domain.value_objects import PermissionScope
 from infrastructure.auth.jwt_service import JwtSessionTokenService
 from infrastructure.auth.opaque_token_service import SecureOpaqueTokenService
 from infrastructure.auth.password_hashing import Pbkdf2PasswordHasher
 from infrastructure.clock import SystemClock
-from infrastructure.config import settings
+from infrastructure.config import Settings, settings
 from infrastructure.persistence.db import get_session
 from infrastructure.persistence.repositories.sqlalchemy_drawing_repository import (
     SqlAlchemyDrawingRepository,
@@ -48,6 +55,12 @@ from infrastructure.persistence.repositories.sqlalchemy_user_repository import (
     SqlAlchemyOAuthTokenRepository,
     SqlAlchemyUserRepository,
 )
+from infrastructure.persistence.repositories.sqlalchemy_webhook_repository import (
+    SqlAlchemyWebhookDeliveryRepository,
+    SqlAlchemyWebhookSubscriptionRepository,
+)
+from infrastructure.rate_limit.store import RateLimitStore
+from infrastructure.webhooks.dispatcher import HttpWebhookDispatcher
 
 # ---------------------------------------------------------------------------
 # Infrastructure singletons (stateless adapters — safe to share across requests)
@@ -57,6 +70,7 @@ _password_hasher = Pbkdf2PasswordHasher()
 _session_token_service = JwtSessionTokenService(settings)
 _opaque_token_service = SecureOpaqueTokenService()
 _clock = SystemClock()
+_webhook_dispatcher = HttpWebhookDispatcher(timeout_seconds=settings.webhook_timeout_seconds)
 
 
 def get_db_session(session: Session = Depends(get_session)) -> Session:
@@ -79,66 +93,42 @@ def get_clock() -> SystemClock:
     return _clock
 
 
+def get_webhook_dispatcher() -> WebhookDispatcherPort:
+    return _webhook_dispatcher
+
+
+def get_settings() -> Settings:
+    return settings
+
+
 # ---------------------------------------------------------------------------
 # Repository providers — the only place a use case's dependencies are wired
-# to a concrete SQLAlchemy implementation
+# to a concrete SQLAlchemy implementation. Built from one factory so adding
+# a repository is a one-liner instead of a five-line copy-paste.
 # ---------------------------------------------------------------------------
 
 
-def get_project_repo(session: Session = Depends(get_db_session)) -> SqlAlchemyProjectRepository:
-    return SqlAlchemyProjectRepository(session)
+def _repo_provider(repo_cls):
+    def provider(session: Session = Depends(get_db_session)):
+        return repo_cls(session)
+
+    return provider
 
 
-def get_location_repo(session: Session = Depends(get_db_session)) -> SqlAlchemyLocationRepository:
-    return SqlAlchemyLocationRepository(session)
-
-
-def get_spec_division_repo(
-    session: Session = Depends(get_db_session),
-) -> SqlAlchemySpecDivisionRepository:
-    return SqlAlchemySpecDivisionRepository(session)
-
-
-def get_spec_section_repo(
-    session: Session = Depends(get_db_session),
-) -> SqlAlchemySpecSectionRepository:
-    return SqlAlchemySpecSectionRepository(session)
-
-
-def get_drawing_repo(session: Session = Depends(get_db_session)) -> SqlAlchemyDrawingRepository:
-    return SqlAlchemyDrawingRepository(session)
-
-
-def get_drawing_version_repo(
-    session: Session = Depends(get_db_session),
-) -> SqlAlchemyDrawingVersionRepository:
-    return SqlAlchemyDrawingVersionRepository(session)
-
-
-def get_rfi_repo(session: Session = Depends(get_db_session)) -> SqlAlchemyRFIRepository:
-    return SqlAlchemyRFIRepository(session)
-
-
-def get_user_repo(session: Session = Depends(get_db_session)) -> SqlAlchemyUserRepository:
-    return SqlAlchemyUserRepository(session)
-
-
-def get_integration_user_repo(
-    session: Session = Depends(get_db_session),
-) -> SqlAlchemyIntegrationUserRepository:
-    return SqlAlchemyIntegrationUserRepository(session)
-
-
-def get_oauth_client_repo(
-    session: Session = Depends(get_db_session),
-) -> SqlAlchemyOAuthClientRepository:
-    return SqlAlchemyOAuthClientRepository(session)
-
-
-def get_oauth_token_repo(
-    session: Session = Depends(get_db_session),
-) -> SqlAlchemyOAuthTokenRepository:
-    return SqlAlchemyOAuthTokenRepository(session)
+get_project_repo = _repo_provider(SqlAlchemyProjectRepository)
+get_location_repo = _repo_provider(SqlAlchemyLocationRepository)
+get_spec_division_repo = _repo_provider(SqlAlchemySpecDivisionRepository)
+get_spec_section_repo = _repo_provider(SqlAlchemySpecSectionRepository)
+get_drawing_repo = _repo_provider(SqlAlchemyDrawingRepository)
+get_drawing_version_repo = _repo_provider(SqlAlchemyDrawingVersionRepository)
+get_rfi_repo = _repo_provider(SqlAlchemyRFIRepository)
+get_user_repo = _repo_provider(SqlAlchemyUserRepository)
+get_integration_user_repo = _repo_provider(SqlAlchemyIntegrationUserRepository)
+get_oauth_client_repo = _repo_provider(SqlAlchemyOAuthClientRepository)
+get_oauth_token_repo = _repo_provider(SqlAlchemyOAuthTokenRepository)
+get_webhook_subscription_repo = _repo_provider(SqlAlchemyWebhookSubscriptionRepository)
+get_webhook_delivery_repo = _repo_provider(SqlAlchemyWebhookDeliveryRepository)
+get_rate_limit_store = _repo_provider(RateLimitStore)
 
 
 # ---------------------------------------------------------------------------
@@ -194,8 +184,30 @@ def get_respond_to_rfi(repo=Depends(get_rfi_repo)) -> RespondToRFI:
     return RespondToRFI(repo)
 
 
-def get_close_rfi(repo=Depends(get_rfi_repo), clock=Depends(get_clock)) -> CloseRFI:
-    return CloseRFI(repo, clock)
+def get_close_rfi(
+    repo=Depends(get_rfi_repo),
+    clock=Depends(get_clock),
+    webhook_subscription_repo=Depends(get_webhook_subscription_repo),
+    webhook_delivery_repo=Depends(get_webhook_delivery_repo),
+    webhook_dispatcher=Depends(get_webhook_dispatcher),
+) -> CloseRFI:
+    return CloseRFI(repo, clock, webhook_subscription_repo, webhook_delivery_repo, webhook_dispatcher)
+
+
+def get_register_webhook_subscription(
+    repo=Depends(get_webhook_subscription_repo),
+) -> RegisterWebhookSubscription:
+    return RegisterWebhookSubscription(repo)
+
+
+def get_list_webhook_subscriptions(
+    repo=Depends(get_webhook_subscription_repo),
+) -> ListWebhookSubscriptions:
+    return ListWebhookSubscriptions(repo)
+
+
+def get_list_activity(repo=Depends(get_webhook_delivery_repo)) -> ListActivity:
+    return ListActivity(repo)
 
 
 def get_login_user(
@@ -254,6 +266,13 @@ class ActingContext:
         assert self.permission_scope is not None
         return self.permission_scope.grants(resource_type)
 
+    def require_scope(self, resource_type: str) -> None:
+        """For single-resource GETs: an under-scoped credential gets a 404,
+        matching real Procore's behavior of simply not exposing the resource
+        rather than confirming its existence with a 403 (docs/04)."""
+        if not self.can_see(resource_type):
+            raise HTTPException(status.HTTP_404_NOT_FOUND)
+
 
 def get_acting_context(
     res_session: str | None = Cookie(default=None),
@@ -286,3 +305,43 @@ def get_acting_context(
         )
 
     raise HTTPException(status.HTTP_401_UNAUTHORIZED, "No session cookie or bearer token provided")
+
+
+# ---------------------------------------------------------------------------
+# Rate limiting — applies only to OAuth2 integration-client traffic
+# (docs/04's per-client_id budget); human sessions are never throttled here.
+# Deliberately independent of get_acting_context (a second, cheap token
+# lookup) so it stays a swappable, separately-testable concern rather than
+# entangled with authorization.
+# ---------------------------------------------------------------------------
+
+
+def enforce_rate_limit(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
+    token_repo: SqlAlchemyOAuthTokenRepository = Depends(get_oauth_token_repo),
+    store: RateLimitStore = Depends(get_rate_limit_store),
+    clock: SystemClock = Depends(get_clock),
+    cfg: Settings = Depends(get_settings),
+) -> None:
+    if credentials is None:
+        return
+
+    token = token_repo.get_by_access_token(credentials.credentials)
+    if token is None:
+        return  # an invalid/unknown token is get_acting_context's problem, not rate limiting's
+
+    result = store.check_and_record(
+        client_id=token.client_id,
+        now=clock.now(),
+        window=timedelta(seconds=cfg.rate_limit_window_seconds),
+        max_requests=cfg.rate_limit_max_requests,
+    )
+    if not result.allowed:
+        # Headers must go through HTTPException's own `headers` param — a
+        # Response object mutated inside a dependency is discarded once an
+        # exception is raised, FastAPI builds the error response from scratch.
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            "Rate limit exceeded",
+            headers={"Retry-After": str(result.retry_after_seconds)},
+        )

@@ -75,13 +75,19 @@ downstream/
 ## Running
 
 ```
-docker compose -f infra/docker-compose.yml --project-directory . up
+docker compose -f infra/docker-compose.yml up
 ```
 
-`--project-directory .` is required: Compose resolves every service's build
-context relative to the project directory, not the compose file's own
-location, and this file lives in `infra/` while every build path is written
-relative to the repo root.
+Compose resolves every service's build context relative to the compose
+file's own directory (`infra/`), not the invocation directory — so build
+paths in this file are written relative to `infra/` (e.g.
+`../reference-systems/...`, `./apps/...` meaning `infra/apps/...`). The
+`reference-engineering-*` services' paths are correct under this plain
+invocation. **Known pre-existing gap:** the `apps/*` service paths
+(`./apps/connector-procore` etc.) resolve to `infra/apps/connector-procore`,
+which doesn't exist — those paths have been wrong since the very first
+commit. Not fixed yet because none of those services have real build
+content to run regardless; revisit when the first of them is implemented.
 
 Deferred connectors (`connector-acc`, `connector-oracle`, `connector-erpnext`)
 are declared under the `deferred` Compose profile and are not started by

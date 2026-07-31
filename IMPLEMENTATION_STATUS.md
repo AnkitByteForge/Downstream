@@ -1,6 +1,6 @@
 # Downstream — Implementation Status
 
-**Last updated:** 2026-07-31 (RES-1)
+**Last updated:** 2026-08-01 (RES-2)
 **Purpose of this document:** a single reference for exactly what has been built so far, in what order, and why — so any future session (human or agent) can pick up work without re-deriving decisions already made. This file is a living status record, not a frozen design document; it does not belong in `/docs` and carries no architectural authority of its own. If it ever disagrees with `/docs`, `/docs` wins.
 
 ---
@@ -32,7 +32,9 @@ Every decision below traces back to the seven frozen documents in `/docs`, read 
 | `37b29c4` | Made directly by the user — added the four `docs/reference/*` documents and renamed the two mock scaffold folders to `infra/mocks/Reference Engineering System/` and `infra/mocks/Reference Commercial System/` (docker-compose.yml's build paths were not updated to match at the time). |
 | `90dd7c5` | Made directly by the user — added this document. |
 | `cf6683e` | Made directly by the user — added `docs/adr/ADR-001.md` (Reference Engineering System includes a web UI) and `docs/adr/ADR-002.md` (implementation directories use kebab-case; document titles unchanged). |
-| *(this commit)* | **Reference Engineering System — RES-1.** See §10 below. |
+| `cb53b04` | **Reference Engineering System — RES-1.** See §10 below. |
+| `d2c58b3` | Made directly by the user — corrected the `reference-engineering-*` build paths in `docker-compose.yml` to `../reference-systems/...`, which is only correct under plain (no `--project-directory`) invocation. Reconciled in this session — see §10.7. |
+| *(this commit)* | **Reference Engineering System — RES-2.** See §11 below. |
 
 ---
 
@@ -44,10 +46,10 @@ Every decision below traces back to the seven frozen documents in `/docs`, read 
 | `apps/*` (16 services) | **Scaffold only** — folder structure, placeholder README/Dockerfile/pyproject.toml. Zero business logic, zero APIs, zero database code. This is Downstream's own service mesh — untouched by RES-1. |
 | `packages/*` (5 packages) | **Implemented** — real, tested Pydantic models and an ABC. This is Milestone 0 (Downstream's own shared contracts — not used by the Reference Engineering System, see §10.1). |
 | `infra/` | `docker-compose.yml` now wires the Reference Engineering System's three containers (db/backend/frontend); every other service entry is still scaffold-only, matching the blueprint. `mocks/Reference Engineering System/` was removed — superseded by `reference-systems/reference-engineering-system/` (see §10). `mocks/Reference Commercial System/` remains an empty placeholder. |
-| `reference-systems/reference-engineering-system/` | **RES-1 implemented** — FastAPI backend (Clean Architecture) + Next.js frontend, both real, both tested, both containerized and verified end to end. See §10. |
-| Tests | 201 `packages/*` unit tests (unchanged) + 20 new Reference Engineering System backend tests (unit + application + architecture-boundary), all passing. Frontend: build + typecheck + lint clean; no automated frontend tests yet (Playwright suite is RES-5 scope). |
+| `reference-systems/reference-engineering-system/` | **RES-1 + RES-2 implemented** — FastAPI backend (Clean Architecture) + Next.js frontend, both real, both tested, both containerized and verified end to end, now including webhook dispatch, rate limiting, pagination, Drawing Register/Detail/Revision-Timeline, and Activity Feed. See §10 (RES-1) and §11 (RES-2). |
+| Tests | 201 `packages/*` unit tests (unchanged) + 41 Reference Engineering System backend tests (20 from RES-1 + 21 new: unit, application-with-fakes, architecture-boundary, integration against real Postgres, and full-app contract tests), all passing. Frontend: build + typecheck + lint clean; no automated frontend tests yet (Playwright suite is RES-5 scope). |
 | Downstream Milestone (per blueprint §9) | Milestone 0 complete. Milestones 1–5 not started — unaffected by this phase. |
-| Reference Engineering System Milestone (per Plan v2 §17) | **RES-1 complete.** RES-2 through RES-5 not started. |
+| Reference Engineering System Milestone (per Plan v2 §17) | **RES-1 and RES-2 complete.** RES-3 through RES-5 not started. |
 
 ---
 
@@ -304,11 +306,11 @@ Every page is a client component calling the backend's own REST API with `creden
 
 `infra/docker-compose.yml` gained three services: `reference-engineering-db` (Postgres 16, dedicated volume), `reference-engineering-backend` (port 8000), `reference-engineering-frontend` (port 3100, standalone Next.js build). `connector-procore`'s `depends_on` was updated to point at `reference-engineering-backend` instead of the now-deleted `mock-engineering-system`.
 
-**A pre-existing, repo-wide bug was discovered and fixed while verifying this:** every build path in `docker-compose.yml` (`./apps/connector-procore`, etc.) is written relative to the repo root, but Compose resolves build contexts relative to the *compose file's own directory* (`infra/`) unless `--project-directory` is passed explicitly. This means `docker compose -f infra/docker-compose.yml up` — the exact command the root `README.md` has documented since commit `49a12f8` — has never actually worked for any of the 16 pre-existing service definitions, not just the new ones. Fixed by documenting `--project-directory .` in `README.md`'s run instructions; `docker compose config` was used to confirm every path (old and new) now resolves correctly. No service definitions were rewritten — this was a one-line invocation fix, not a path-by-path rewrite.
+**A pre-existing, repo-wide path-resolution issue was discovered while verifying this**, and reconciled across two commits: Compose resolves every service's build context relative to the *compose file's own directory* (`infra/`), not the repo root — so every `apps/*` path (`./apps/connector-procore`, etc.), written as if relative to the repo root, has silently resolved to a nonexistent `infra/apps/connector-procore` since commit `49a12f8`. RES-1 (commit `cb53b04`) initially "fixed" this by documenting `--project-directory .`, which correctly repoints the `apps/*` paths — but the follow-up commit `d2c58b3` (made directly by the user) corrected the two new `reference-engineering-*` paths to `../reference-systems/...`, which is only correct under the *plain* invocation (no `--project-directory`), the opposite convention. `README.md`'s run instructions were updated to match the user's commit (plain `docker compose -f infra/docker-compose.yml up`) rather than reverting it, since that change was explicit and intentional. **Net state: the two `reference-engineering-*` services resolve correctly under plain invocation; the pre-existing `apps/*` paths remain broken under that same invocation, exactly as they were before RES-1 touched this file.** Neither is a regression from where the repo already stood — fixing `apps/*` is real, deferred work for whenever the first of those services gets real build content.
 
 **Verified against the actual containers, not just `config`:** built both images, brought up all three services via `docker compose ... up -d`, ran `alembic upgrade head` and the seed script *inside* the running backend container, then confirmed login + the full RFI-214 fetch from the host machine against the containerized backend, and confirmed the frontend container serves `/login` with a 200. All three containers were stopped (not removed) afterward.
 
-**Known, pre-existing, out-of-scope issue left as-is:** `mock-erp`'s build path (`./infra/mocks/mock-erp`) is also stale — the folder was renamed to `infra/mocks/Reference Commercial System/` in commit `37b29c4` without updating `docker-compose.yml`. Not fixed here because Commercial System work is an explicit non-goal of this phase; flagged in both `docker-compose.yml` itself (inline comment) and here so it isn't silently forgotten.
+**Known, pre-existing, out-of-scope issue left as-is:** `mock-erp`'s build path (`./infra/mocks/mock-erp`, resolved relative to `infra/`) points at a folder that was renamed to `infra/mocks/Reference Commercial System/` in commit `37b29c4` without updating `docker-compose.yml` — under the now-confirmed plain-invocation convention the correct relative path would be `./mocks/Reference Commercial System`. Not fixed here because Commercial System work is an explicit non-goal of this phase; flagged in both `docker-compose.yml` itself (inline comment) and here so it isn't silently forgotten.
 
 ### 10.8 Testing
 
@@ -336,14 +338,105 @@ python -m venv .venv && .venv/Scripts/pip install -e ".[dev]"
 # point RES_DATABASE_URL at a running Postgres, then:
 .venv/Scripts/python -m alembic upgrade head
 .venv/Scripts/python -m pytest -q
-# expected: 20 passed
+# expected (as of RES-2): 41 passed — see §11.8
 ```
 
 ```bash
 # from the repo root
-docker compose -f infra/docker-compose.yml --project-directory . up -d --build reference-engineering-db reference-engineering-backend reference-engineering-frontend
+docker compose -f infra/docker-compose.yml up -d --build reference-engineering-db reference-engineering-backend reference-engineering-frontend
 docker exec <backend-container> python -m alembic upgrade head
 docker exec <backend-container> python -m seed.run_seed
 curl http://localhost:8000/health
 curl http://localhost:3100/login
 ```
+
+---
+
+## 11. Phase 4 — Reference Engineering System: RES-2
+
+**Task given:** before starting RES-2, review RES-1 for non-behavioral architectural improvements (explicitly: improve, don't redesign); then implement RES-2 exactly as scoped in Plan v2 §17 — webhook dispatch (RFI only), rate limiting, pagination on the backend; Drawing Register, Drawing Detail, Drawing Revision Timeline, and Activity Feed on the frontend. Maintain Clean Architecture boundaries, keep all tests passing, add comprehensive tests for every new feature.
+
+### 11.1 Pre-RES-2 review: two real findings, fixed
+
+1. **`api/deps.py` had ~10 near-identical `get_X_repo` provider functions** (session → repo, five lines each). Replaced with a `_repo_provider(repo_cls)` factory — each provider is now a one-line call. Zero behavior change.
+2. **`locations.py`'s list endpoint was missing the `ctx.can_see("locations")` scope check** that every other list endpoint (`rfis`, `documents`, `spec_sections`) already had — a genuine inconsistency, not a design choice: a partially-scoped integration credential could see *all* locations regardless of its declared scope, silently violating the `acting_credential_scope` guarantee docs/04 is built around. Fixed by extracting the repeated `if not ctx.can_see(...): raise HTTPException(404)` pattern (used identically in `documents.py` and `rfis.py`) into `ActingContext.require_scope()`, and adding the missing check to `locations.py`. Verified live: a partial-scope OAuth token that previously got all 4 seeded locations now gets `[]`, matching the same token's already-correct behavior on `spec_sections`.
+
+Both changes were made and verified (20/20 tests green) *before* any RES-2 code was written, per the instruction to review first.
+
+### 11.2 Architectural summary
+
+New Application-layer port: `WebhookDispatcherPort` (`dispatch(subscription, payload) -> bool`, never raises — a delivery failure is a fact to record, not an exception that should roll back the domain transition that triggered it). New domain entities: `WebhookSubscription`, `WebhookDelivery` — kept in `domain/` because "which resource/event-type this project has asked to be notified about" and "what was attempted" are real business facts of this system's own domain (mirroring how real Procore's webhook registrations are themselves an owned resource), not infrastructure incidental. Rate limiting, by contrast, was kept **entirely out of domain and application** — it's a protocol-level concern of exposing this system as an HTTP API (no engineering-domain meaning), implemented as `infrastructure/rate_limit/store.py` plus a single `api/deps.py` dependency (`enforce_rate_limit`), never touching `domain/` or `application/` at all. This distinction — model what's a real business fact as a domain entity, keep what's purely a wire/protocol concern out of the domain — is the main architectural judgment call this milestone made.
+
+`CloseRFI` (the one use case with a side effect worth persisting) grew three new constructor dependencies (`webhook_subscription_repo`, `webhook_delivery_repo`, `webhook_dispatcher`) — still fully testable with in-memory fakes and zero database, per `tests/unit/application/test_rfi_use_cases.py`'s new webhook-dispatch tests. Pagination was deliberately implemented at the **API layer** (`api/pagination.py`), not inside use cases — `page`/`per_page` are HTTP concepts, and putting them in the application layer would leak a wire concern into code that's supposed to be transport-agnostic. Pagination is in-memory (paginate the full list the use case already returns) rather than pushed into the SQL query — a deliberate, stated simplification appropriate at this system's current data scale, not a performance oversight (see §11.9).
+
+### 11.3 Migration summary
+
+Two new migrations, applied cleanly from a running RES-1 database (0001–0004 already applied) and, separately, verified from an empty database alongside 0001–0004 in one `alembic upgrade head` run:
+
+- **`0005_webhooks`** — `webhook_subscriptions` (id, project_id, resource_name, event_type, target_url, secret) and `webhook_deliveries` (id, project_id, subscription_id, resource_name, resource_id, event_type, occurred_at, status, dispatched_at) — the latter is the append-only log the Activity Feed reads from.
+- **`0006_rate_limit_state`** — `rate_limit_state` (client_id PK, window_start, request_count) — a fixed-window counter per OAuth `client_id`.
+
+Schema-vs-ORM-metadata diff (same method as RES-1's verification) confirmed an exact match after both migrations.
+
+### 11.4 API changes
+
+**New:**
+- `POST /webhook_subscriptions?project_id=` / `GET /webhook_subscriptions?project_id=` — this system's own admin/setup surface (not Procore-shaped, kept outside `/rest/v1.0/` and outside the rate-limit budget, matching how registering a webhook is a one-time Developer-Portal action on real Procore, not a resource API call).
+- `GET /rest/v1.0/projects/{project_id}/activity` — backs the Activity Feed, reads the `WebhookDelivery` log.
+
+**Changed (backward-compatible additions, no existing field removed or renamed):**
+- `GET /rest/v1.0/projects/{project_id}/rfis`, `.../documents`, `.../spec_sections`, `.../locations` now accept `?page=&per_page=` (default `page=1`, `per_page=20`, max `per_page=100`) and set an `X-Total` response header — matching docs/04's pagination requirement, verified via contract test.
+- `PATCH /rest/v1.0/projects/{project_id}/rfis/{rfi_id}/close` now dispatches a webhook (see §11.5) as a side effect — the response shape is unchanged, only the side effect is new.
+- Every route under `/rest/v1.0/` now enforces a per-`client_id` rate limit (OAuth2 traffic only — human sessions are exempt); exceeding it returns `429` with a `Retry-After` header.
+
+### 11.5 Webhook dispatch — verified against a real HTTP server, not just a fake
+
+On `PATCH .../rfis/{id}/close`, `CloseRFI` looks up every `WebhookSubscription` matching `(project_id, "rfis", "update")`, builds the exact five-field thin payload from Reference Trace Phase 0 (`resource_name`, `resource_id`, `project_id`, `event_type`, `timestamp` — nothing else), HMAC-signs it (`X-Signature: sha256=...`), POSTs it (one retry on connection failure, then logged and dropped — no dead-letter queue, explicitly deferred), and records a `WebhookDelivery` row (`SENT` or `FAILED`) regardless of outcome. A delivery failure never rolls back the RFI's own state transition.
+
+**End-to-end verification performed**, beyond the automated contract test: started a real local HTTP server, seeded a subscription pointing at it, closed a real RFI through the real running API, and confirmed the server received a POST with the exact five JSON keys and a signature that independently recomputing `hmac.new(secret, body, sha256)` matched byte-for-byte.
+
+The default seeded webhook target is `http://localhost:9999/webhook-sink` (overridable via `RES_SEED_WEBHOOK_TARGET_URL`) — a placeholder receiver, since no real subscriber exists yet; this is exactly the seam a future Connector-Procore would attach to.
+
+### 11.6 Rate limiting
+
+Fixed-window counter, one row per `client_id` in `rate_limit_state`. Default budget: 3,600 requests/hour (matching the real Procore ceiling docs/04 cites), configurable via `RES_RATE_LIMIT_MAX_REQUESTS`/`RES_RATE_LIMIT_WINDOW_SECONDS`, overridden to a tiny budget in tests. Applies only to Bearer-token (OAuth2 integration-client) traffic — human sessions are never throttled, matching docs/04's framing of this as an API-client concern.
+
+**One real bug found and fixed during verification:** the first implementation mutated `response.headers["Retry-After"]` on the injected `Response` object before raising `HTTPException`. FastAPI discards that `Response` once an exception is raised and builds a fresh error response from scratch, so the header never actually reached the client — the contract test caught this immediately (`assert "Retry-After" in response.headers` failed against a real request). Fixed by passing `headers={"Retry-After": ...}` directly to `HTTPException`, which does propagate. Documented here because it's a genuinely non-obvious FastAPI behavior worth remembering.
+
+### 11.7 Frontend changes
+
+New pages, consuming only real backend endpoints (`credentials: "include"`, no bypass):
+
+| Route | Backed by |
+|---|---|
+| `/projects/[projectId]/drawings` | `GET .../documents` — sheet number, title, discipline |
+| `/projects/[projectId]/drawings/[drawingId]` | `GET .../documents/{id}` + `.../documents/{id}/versions` — the Revision Timeline is embedded here as a vertical timeline (newest first), showing each version's status badge, revision clouds, supersession pointer, and a "Current" marker tied to `Drawing.current_version_id` — not a separate route, consistent with how the backend already models a version as a child of its drawing |
+| `/projects/[projectId]/activity` | `GET .../activity` — reads the same `WebhookDelivery` log webhook dispatch writes to, per the plan's explicit instruction to reuse that stream rather than invent a second one |
+
+`AppShell`'s project-context nav gained "Drawings" and "Activity" links. `npm run build` and `npm run lint` both pass clean with the new routes.
+
+Pagination controls (page/per_page UI) were **not** added to the frontend — the backend's pagination fidelity (docs/04's stated requirement) didn't imply a UI requirement, and with the current seed data's small row counts a pager would be inert. Noted in §11.9 as a scope boundary, not an oversight.
+
+### 11.8 Test results
+
+**41 backend tests, all passing** (20 carried over from RES-1 + 21 new), across four tiers:
+- `tests/unit/domain/` — unchanged from RES-1.
+- `tests/unit/application/` — new: `CloseRFI` webhook-dispatch tests against `FakeWebhookDispatcher`/in-memory subscription+delivery repos (dispatches to matching subscriptions with the exact 5-key payload; records `FAILED` without raising when the dispatcher reports failure; ignores subscriptions for other resource types). New: `application/webhook_payloads.py`'s exact-key-set assertion.
+- `tests/unit/api/` (new tier) — `paginate()` math (first page, last partial page, page beyond range).
+- `tests/unit/infrastructure/` (new tier) — HMAC signing determinism/secret-sensitivity.
+- `tests/integration/` (new tier) — `RateLimitStore` against a real Postgres connection (rollback-isolated per test): allows under budget, denies over budget with a positive `retry_after`, resets after the window elapses, independent budgets per `client_id`.
+- `tests/contract/` (new tier) — full `TestClient(app)` + real database, real committed-and-torn-down fixture rows (not rollback-isolated, since the app's own request-handling connection is separate from the test's): the exact thin-payload contract test (asserts the dispatched payload's key set, catches any future "helpful" field addition), the 429 + `Retry-After` contract test (the one that caught the header bug above), a human-sessions-are-never-rate-limited test, and three pagination contract tests (`X-Total` header, `per_page=0` rejected with 422, page-beyond-range returns `[]` with an accurate total).
+- `tests/architecture/test_layer_boundaries.py` — unchanged, still passing with the new `domain/entities/webhook.py` and `application/ports/webhook_dispatcher_port.py` in place (confirms they don't import FastAPI/SQLAlchemy).
+
+Frontend: `npm run build` and `npm run lint` clean, zero errors/warnings.
+
+**Full-stack verification**: rebuilt both Docker images, brought up `reference-engineering-db`/`-backend`/`-frontend` via Compose, ran migrations 0001–0006 and the seed script inside the running backend container, then re-ran the real-HTTP webhook test (§11.5) and a rate-limit smoke check against the containerized backend.
+
+### 11.9 Known limitations
+
+- **In-memory pagination** — `paginate()` slices the full result list the use case already fetched, rather than pushing `LIMIT`/`OFFSET` into SQL. Correct and simple at this system's current row counts; would need revisiting before real production data volumes.
+- **No dead-letter queue or retry/backoff schedule for webhook dispatch** — one retry, then logged and dropped, per the approved plan's explicit RES-2 scope boundary (real retry/backoff is Synchronization Service territory in a much later Downstream milestone, not this system's job).
+- **No frontend pagination UI** — the backend's pagination is real and tested; nothing in the UI exposes `page`/`per_page` yet.
+- **No Playwright/browser-automation test suite** — RES-5 scope per the approved plan. One manual headless-Chrome screenshot of the login page was captured for this summary (see chat); authenticated-page screenshots would require a scripted login session, not attempted here to stay within RES-2's scope.
+- **`docker-compose.yml`'s pre-existing `apps/*` path-resolution issue remains unfixed** — see §10.7's updated account; still out of scope, still not a regression.
+- **Webhook coverage is RFI-only** — DrawingVersion/Submittal webhook coverage is explicitly RES-3 scope.

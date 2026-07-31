@@ -9,6 +9,7 @@ from .user_repository import (
     OAuthTokenRepository,
     UserRepository,
 )
+from .webhook_repository import WebhookDeliveryRepository, WebhookSubscriptionRepository
 
 __all__ = [
     "DrawingRepository",
@@ -23,4 +24,6 @@ __all__ = [
     "OAuthClientRepository",
     "OAuthTokenRepository",
     "UserRepository",
+    "WebhookDeliveryRepository",
+    "WebhookSubscriptionRepository",
 ]

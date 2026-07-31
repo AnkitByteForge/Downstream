@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from datetime import date, datetime, timezone
 
 from sqlalchemy.orm import Session
@@ -16,6 +17,7 @@ from domain.entities import (
     SpecDivision,
     SpecSection,
     User,
+    WebhookSubscription,
 )
 from domain.state_machines import drawing_version_transitions, rfi_transitions
 from domain.value_objects import BallInCourt, PermissionScope, RevisionCloud
@@ -41,6 +43,9 @@ from infrastructure.persistence.repositories.sqlalchemy_user_repository import (
     SqlAlchemyOAuthClientRepository,
     SqlAlchemyUserRepository,
 )
+from infrastructure.persistence.repositories.sqlalchemy_webhook_repository import (
+    SqlAlchemyWebhookSubscriptionRepository,
+)
 
 # The exact scenario from 05_Downstream_Reference_Execution_Trace.md: Ananya Rao
 # reviews RFI-214 on Meridian Tower, a duct reroute at Grid B-4 citing Spec
@@ -50,6 +55,14 @@ from infrastructure.persistence.repositories.sqlalchemy_user_repository import (
 
 RFI_CLOSED_AT = datetime(2026, 7, 28, 9, 14, 3, tzinfo=timezone.utc)
 DEMO_PASSWORD = "downstream-demo"
+
+# Seeded so closing an RFI has somewhere real to dispatch to. Overridable so
+# a future Connector-Procore dev instance can subscribe its own inbound
+# receiver here instead of the default no-op sink.
+DEFAULT_WEBHOOK_TARGET_URL = os.environ.get(
+    "RES_SEED_WEBHOOK_TARGET_URL", "http://localhost:9999/webhook-sink"
+)
+DEFAULT_WEBHOOK_SECRET = "seed-webhook-secret"
 
 
 def seed(session: Session) -> dict:
@@ -66,6 +79,7 @@ def seed(session: Session) -> dict:
     rfi_repo = SqlAlchemyRFIRepository(session)
     integration_repo = SqlAlchemyIntegrationUserRepository(session)
     oauth_client_repo = SqlAlchemyOAuthClientRepository(session)
+    webhook_subscription_repo = SqlAlchemyWebhookSubscriptionRepository(session)
 
     discipline_repo.add(Discipline(code="M", name="Mechanical"))
 
@@ -252,6 +266,17 @@ def seed(session: Session) -> dict:
             client_secret_hash=hasher.hash("partial-scope-secret"),
             integration_user_id=partial_scope_integration.id,
             authorization_code="seed-auth-code-partial",
+        )
+    )
+
+    webhook_subscription_repo.add(
+        WebhookSubscription(
+            id=None,
+            project_id=project.id,
+            resource_name="rfis",
+            event_type="update",
+            target_url=DEFAULT_WEBHOOK_TARGET_URL,
+            secret=DEFAULT_WEBHOOK_SECRET,
         )
     )
 

@@ -83,3 +83,16 @@ export interface RFIOut {
   location_ids: number[];
   closed_at: string | null;
 }
+
+export type ActivityStatus = "SENT" | "FAILED";
+
+export interface ActivityEntryOut {
+  id: number;
+  project_id: number;
+  resource_name: string;
+  resource_id: number;
+  event_type: string;
+  occurred_at: string;
+  status: ActivityStatus;
+  dispatched_at: string;
+}

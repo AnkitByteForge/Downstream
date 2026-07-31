@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from application.exceptions import NotFound
-from application.ports import ClockPort
-from domain.entities import RFI
-from domain.repositories import RFIRepository
+from application.ports import ClockPort, WebhookDispatcherPort
+from application.webhook_payloads import build_thin_payload
+from domain.entities import RFI, WebhookDelivery
+from domain.repositories import RFIRepository, WebhookDeliveryRepository, WebhookSubscriptionRepository
 from domain.state_machines import rfi_transitions
 
 
@@ -40,17 +41,55 @@ class RespondToRFI:
 
 class CloseRFI:
     """Fires the webhook-worthy transition the whole Reference Execution Trace
-    starts from (Phase 0). Webhook dispatch itself is out of scope for RES-1
-    (RES-2) — this use case only performs the state transition and persists it.
+    starts from (Phase 0): closing an RFI dispatches the thin, five-field
+    webhook payload to every subscription registered for (project, "rfis",
+    "update"), and records one WebhookDelivery per attempt regardless of
+    outcome — a dispatch failure never rolls back the transition itself
+    (docs/03: synchronization/notification failures must be visible, never
+    silently swallowed, but also never allowed to corrupt domain state).
     """
 
-    def __init__(self, rfi_repo: RFIRepository, clock: ClockPort) -> None:
+    def __init__(
+        self,
+        rfi_repo: RFIRepository,
+        clock: ClockPort,
+        webhook_subscription_repo: WebhookSubscriptionRepository,
+        webhook_delivery_repo: WebhookDeliveryRepository,
+        webhook_dispatcher: WebhookDispatcherPort,
+    ) -> None:
         self._rfi_repo = rfi_repo
         self._clock = clock
+        self._webhook_subscription_repo = webhook_subscription_repo
+        self._webhook_delivery_repo = webhook_delivery_repo
+        self._webhook_dispatcher = webhook_dispatcher
 
     def execute(self, rfi_id: int, response_text: str | None = None) -> RFI:
         rfi = self._rfi_repo.get(rfi_id)
         if rfi is None:
             raise NotFound("RFI", rfi_id)
         updated = rfi_transitions.close_rfi(rfi, self._clock.now(), response_text)
-        return self._rfi_repo.update(updated)
+        saved = self._rfi_repo.update(updated)
+        self._dispatch_webhooks(saved)
+        return saved
+
+    def _dispatch_webhooks(self, rfi: RFI) -> None:
+        occurred_at = rfi.closed_at or self._clock.now()
+        subscriptions = self._webhook_subscription_repo.list_matching(
+            rfi.project_id, "rfis", "update"
+        )
+        for subscription in subscriptions:
+            payload = build_thin_payload("rfis", rfi.id, rfi.project_id, "update", occurred_at)
+            delivered = self._webhook_dispatcher.dispatch(subscription, payload)
+            self._webhook_delivery_repo.add(
+                WebhookDelivery(
+                    id=None,
+                    project_id=rfi.project_id,
+                    subscription_id=subscription.id,
+                    resource_name="rfis",
+                    resource_id=rfi.id,
+                    event_type="update",
+                    occurred_at=occurred_at,
+                    status="SENT" if delivered else "FAILED",
+                    dispatched_at=self._clock.now(),
+                )
+            )

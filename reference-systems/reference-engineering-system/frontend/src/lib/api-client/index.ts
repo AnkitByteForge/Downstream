@@ -1,5 +1,6 @@
 import { apiClient } from "./client";
 import type {
+  ActivityEntryOut,
   DrawingOut,
   DrawingVersionOut,
   LocationOut,
@@ -62,4 +63,9 @@ export const rfisApi = {
     apiClient.patch<RFIOut>(`/rest/v1.0/projects/${projectId}/rfis/${rfiId}/close`, {
       response_text: responseText,
     }),
+};
+
+export const activityApi = {
+  list: (projectId: number) =>
+    apiClient.get<ActivityEntryOut[]>(`/rest/v1.0/projects/${projectId}/activity`),
 };

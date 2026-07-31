@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from api.deps import (
     ActingContext,
@@ -10,6 +10,7 @@ from api.deps import (
     get_list_rfis,
     get_respond_to_rfi,
 )
+from api.pagination import PageParams, paginate
 from api.schemas.rfi import CloseRFIIn, RFIOut, RespondToRFIIn
 from application.exceptions import NotFound
 from application.use_cases.rfi_use_cases import CloseRFI, GetRFI, ListRFIs, RespondToRFI
@@ -45,12 +46,17 @@ def _rfi_out(rfi: RFI) -> RFIOut:
 @router.get("/projects/{project_id}/rfis", response_model=list[RFIOut])
 def list_rfis(
     project_id: int,
+    response: Response,
     use_case: ListRFIs = Depends(get_list_rfis),
     ctx: ActingContext = Depends(get_acting_context),
+    page_params: PageParams = Depends(),
 ) -> list[RFIOut]:
     if not ctx.can_see("rfis"):
+        response.headers["X-Total"] = "0"
         return []
-    return [_rfi_out(r) for r in use_case.execute(project_id)]
+    page, total = paginate(use_case.execute(project_id), page_params)
+    response.headers["X-Total"] = str(total)
+    return [_rfi_out(r) for r in page]
 
 
 @router.get("/projects/{project_id}/rfis/{rfi_id}", response_model=RFIOut)
@@ -60,8 +66,7 @@ def get_rfi(
     use_case: GetRFI = Depends(get_get_rfi),
     ctx: ActingContext = Depends(get_acting_context),
 ) -> RFIOut:
-    if not ctx.can_see("rfis"):
-        raise HTTPException(status.HTTP_404_NOT_FOUND)
+    ctx.require_scope("rfis")
     try:
         return _rfi_out(use_case.execute(rfi_id))
     except NotFound as exc:
@@ -76,8 +81,7 @@ def respond_to_rfi(
     use_case: RespondToRFI = Depends(get_respond_to_rfi),
     ctx: ActingContext = Depends(get_acting_context),
 ) -> RFIOut:
-    if not ctx.can_see("rfis"):
-        raise HTTPException(status.HTTP_404_NOT_FOUND)
+    ctx.require_scope("rfis")
     try:
         return _rfi_out(use_case.execute(rfi_id, body.response_text, body.manager_user_id))
     except NotFound as exc:
@@ -96,8 +100,7 @@ def close_rfi(
 ) -> RFIOut:
     """The transition the entire Reference Execution Trace begins from
     (Phase 0). Thin webhook dispatch on this transition is RES-2 scope."""
-    if not ctx.can_see("rfis"):
-        raise HTTPException(status.HTTP_404_NOT_FOUND)
+    ctx.require_scope("rfis")
     try:
         return _rfi_out(use_case.execute(rfi_id, body.response_text))
     except NotFound as exc:
