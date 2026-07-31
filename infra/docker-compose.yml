@@ -61,7 +61,7 @@ services:
     networks: [downstream-net]
 
   reference-engineering-backend:
-    build: ./reference-systems/reference-engineering-system/backend
+    build: ../reference-systems/reference-engineering-system/backend
     environment:
       RES_DATABASE_URL: postgresql+psycopg://res:res@reference-engineering-db:5432/reference_engineering
       RES_JWT_SECRET: dev-secret-change-me
@@ -71,7 +71,7 @@ services:
     networks: [downstream-net]
 
   reference-engineering-frontend:
-    build: ./reference-systems/reference-engineering-system/frontend
+    build: ../reference-systems/reference-engineering-system/frontend
     environment:
       NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
     depends_on: [reference-engineering-backend]
