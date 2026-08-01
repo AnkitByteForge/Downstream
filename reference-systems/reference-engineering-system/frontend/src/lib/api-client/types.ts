@@ -96,3 +96,58 @@ export interface ActivityEntryOut {
   status: ActivityStatus;
   dispatched_at: string;
 }
+
+export interface SpecDivisionOut {
+  number: string;
+  title: string;
+}
+
+export interface VendorOut {
+  id: number;
+  project_id: number;
+  name: string;
+}
+
+export interface SubmittalOut {
+  id: number;
+  project_id: number;
+  number: string;
+  spec_section_id: number;
+  package_id: number | null;
+  vendor_id: number | null;
+  commitment_id: number | null;
+  submittal_type: string;
+  category: string;
+  lead_time_days: number | null;
+  required_on_site_date: string | null;
+  is_long_lead: boolean;
+}
+
+export interface SubmittalRevisionOut {
+  id: number;
+  submittal_id: number;
+  rev_label: string;
+  review_status_id: number;
+  review_status_code: string;
+  review_status_label: string;
+  gates_procurement: boolean;
+  ball_in_court: string;
+  equipment_tag: string | null;
+  manufacturer: string | null;
+  model: string | null;
+  capacity_value: number | null;
+  capacity_unit: string | null;
+  submitted_at: string | null;
+  disposed_by_user_id: number | null;
+  disposition_at: string | null;
+  drawing_version_ids: number[];
+  location_ids: number[];
+}
+
+export interface SubmittalRequirementOut {
+  id: number;
+  project_id: number;
+  spec_section_id: number;
+  submittal_type: string;
+  category: string;
+}

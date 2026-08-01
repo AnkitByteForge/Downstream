@@ -7,7 +7,12 @@ import type {
   ProjectOut,
   RFIOut,
   SessionOut,
+  SpecDivisionOut,
   SpecSectionOut,
+  SubmittalOut,
+  SubmittalRequirementOut,
+  SubmittalRevisionOut,
+  VendorOut,
 } from "./types";
 
 export * from "./types";
@@ -33,6 +38,23 @@ export const locationsApi = {
 export const specSectionsApi = {
   list: (projectId: number) =>
     apiClient.get<SpecSectionOut[]>(`/rest/v1.0/projects/${projectId}/spec_sections`),
+};
+
+export const specDivisionsApi = {
+  list: () => apiClient.get<SpecDivisionOut[]>("/rest/v1.0/spec_divisions"),
+};
+
+export const vendorsApi = {
+  list: (projectId: number) => apiClient.get<VendorOut[]>(`/rest/v1.0/projects/${projectId}/vendors`),
+};
+
+export const submittalRequirementsApi = {
+  list: (projectId: number, specSectionId?: number) =>
+    apiClient.get<SubmittalRequirementOut[]>(
+      `/rest/v1.0/projects/${projectId}/submittal_requirements${
+        specSectionId != null ? `?spec_section_id=${specSectionId}` : ""
+      }`
+    ),
 };
 
 export const documentsApi = {
@@ -68,4 +90,26 @@ export const rfisApi = {
 export const activityApi = {
   list: (projectId: number) =>
     apiClient.get<ActivityEntryOut[]>(`/rest/v1.0/projects/${projectId}/activity`),
+};
+
+export const submittalsApi = {
+  list: (projectId: number) =>
+    apiClient.get<SubmittalOut[]>(`/rest/v1.0/projects/${projectId}/submittals`),
+  get: (projectId: number, submittalId: number) =>
+    apiClient.get<SubmittalOut>(`/rest/v1.0/projects/${projectId}/submittals/${submittalId}`),
+  revisions: (projectId: number, submittalId: number) =>
+    apiClient.get<SubmittalRevisionOut[]>(
+      `/rest/v1.0/projects/${projectId}/submittals/${submittalId}/revisions`
+    ),
+  recordDisposition: (
+    projectId: number,
+    submittalId: number,
+    revisionId: number,
+    reviewStatusCode: string,
+    disposedByUserId: number
+  ) =>
+    apiClient.patch<SubmittalRevisionOut>(
+      `/rest/v1.0/projects/${projectId}/submittals/${submittalId}/revisions/${revisionId}/disposition`,
+      { review_status_code: reviewStatusCode, disposed_by_user_id: disposedByUserId }
+    ),
 };

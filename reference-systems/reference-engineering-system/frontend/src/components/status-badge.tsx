@@ -45,3 +45,39 @@ export function DrawingVersionStatusBadge({ status }: { status: string }) {
     </Badge>
   );
 }
+
+/** Color is driven entirely by gates_procurement, never by matching a
+ * specific status code — the vocabulary is configuration-driven (ADR-003),
+ * so the UI can't hardcode per-code styling either. */
+export function SubmittalStatusBadge({
+  label,
+  gatesProcurement,
+}: {
+  label: string;
+  gatesProcurement: boolean;
+}) {
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        "border-transparent font-medium",
+        gatesProcurement
+          ? "bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-300"
+          : "bg-red-100 text-red-900 dark:bg-red-950 dark:text-red-300"
+      )}
+    >
+      {label}
+    </Badge>
+  );
+}
+
+export function LongLeadBadge() {
+  return (
+    <Badge
+      variant="outline"
+      className="border-transparent bg-amber-100 text-amber-900 font-medium dark:bg-amber-950 dark:text-amber-300"
+    >
+      Long lead
+    </Badge>
+  );
+}

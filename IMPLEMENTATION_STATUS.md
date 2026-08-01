@@ -1,6 +1,6 @@
 # Downstream — Implementation Status
 
-**Last updated:** 2026-08-01 (RES-2)
+**Last updated:** 2026-08-02 (RES-3)
 **Purpose of this document:** a single reference for exactly what has been built so far, in what order, and why — so any future session (human or agent) can pick up work without re-deriving decisions already made. This file is a living status record, not a frozen design document; it does not belong in `/docs` and carries no architectural authority of its own. If it ever disagrees with `/docs`, `/docs` wins.
 
 ---
@@ -34,7 +34,10 @@ Every decision below traces back to the seven frozen documents in `/docs`, read 
 | `cf6683e` | Made directly by the user — added `docs/adr/ADR-001.md` (Reference Engineering System includes a web UI) and `docs/adr/ADR-002.md` (implementation directories use kebab-case; document titles unchanged). |
 | `cb53b04` | **Reference Engineering System — RES-1.** See §10 below. |
 | `d2c58b3` | Made directly by the user — corrected the `reference-engineering-*` build paths in `docker-compose.yml` to `../reference-systems/...`, which is only correct under plain (no `--project-directory`) invocation. Reconciled in this session — see §10.7. |
-| *(this commit)* | **Reference Engineering System — RES-2.** See §11 below. |
+| `4cd2743` | Made directly by the user — added `reference-systems/reference-engineering-system/RES-1_USER_GUIDE.md`, a practical run/test guide (not a design document). |
+| `03e1d35` | **Reference Engineering System — RES-2.** See §11 below. |
+| `1880bf5` | Made directly by the user — added `docs/reference/The Enterprise Fidelity Review.md` and `docs/reference/Canonical_Demo_Dataset.md` (the latter authored by this assistant in an earlier turn, committed by the user alongside the former). |
+| *(this commit)* | **Reference Engineering System — RES-3.** See §12 below. |
 
 ---
 
@@ -46,10 +49,10 @@ Every decision below traces back to the seven frozen documents in `/docs`, read 
 | `apps/*` (16 services) | **Scaffold only** — folder structure, placeholder README/Dockerfile/pyproject.toml. Zero business logic, zero APIs, zero database code. This is Downstream's own service mesh — untouched by RES-1. |
 | `packages/*` (5 packages) | **Implemented** — real, tested Pydantic models and an ABC. This is Milestone 0 (Downstream's own shared contracts — not used by the Reference Engineering System, see §10.1). |
 | `infra/` | `docker-compose.yml` now wires the Reference Engineering System's three containers (db/backend/frontend); every other service entry is still scaffold-only, matching the blueprint. `mocks/Reference Engineering System/` was removed — superseded by `reference-systems/reference-engineering-system/` (see §10). `mocks/Reference Commercial System/` remains an empty placeholder. |
-| `reference-systems/reference-engineering-system/` | **RES-1 + RES-2 implemented** — FastAPI backend (Clean Architecture) + Next.js frontend, both real, both tested, both containerized and verified end to end, now including webhook dispatch, rate limiting, pagination, Drawing Register/Detail/Revision-Timeline, and Activity Feed. See §10 (RES-1) and §11 (RES-2). |
-| Tests | 201 `packages/*` unit tests (unchanged) + 41 Reference Engineering System backend tests (20 from RES-1 + 21 new: unit, application-with-fakes, architecture-boundary, integration against real Postgres, and full-app contract tests), all passing. Frontend: build + typecheck + lint clean; no automated frontend tests yet (Playwright suite is RES-5 scope). |
+| `reference-systems/reference-engineering-system/` | **RES-1 + RES-2 + RES-3 implemented** — FastAPI backend (Clean Architecture) + Next.js frontend, both real, both tested, both containerized and verified end to end. RES-3 adds Submittals (parent/child revisioning, ADR-004), a configuration-driven procurement-release gate (ADR-003), Submittal Packages (ADR-005, unused by seed data), Vendors, minimal Commitments, the spec-driven Submittal Register, and the Submittal Register/Detail + Specification Browser frontend pages. See §10 (RES-1), §11 (RES-2), §12 (RES-3). |
+| Tests | 201 `packages/*` unit tests (unchanged) + 61 Reference Engineering System backend tests (41 from RES-1/RES-2 + 20 new RES-3 tests across unit, application-with-fakes, integration, and contract tiers), all passing, twice in a row from a clean schema. Frontend: build + typecheck + lint clean; no automated frontend tests yet (Playwright suite is RES-5 scope). |
 | Downstream Milestone (per blueprint §9) | Milestone 0 complete. Milestones 1–5 not started — unaffected by this phase. |
-| Reference Engineering System Milestone (per Plan v2 §17) | **RES-1 and RES-2 complete.** RES-3 through RES-5 not started. |
+| Reference Engineering System Milestone (per RES-3 Plan v2 §3) | **RES-1, RES-2, and RES-3 complete.** RES-4 (Design Change family, Field Issues) and RES-5 (ScheduleActivity, ModelObject, ClashItem, Transmittal, cross-entity relationship UI, Playwright) not started. |
 
 ---
 
@@ -439,4 +442,108 @@ Frontend: `npm run build` and `npm run lint` clean, zero errors/warnings.
 - **No frontend pagination UI** — the backend's pagination is real and tested; nothing in the UI exposes `page`/`per_page` yet.
 - **No Playwright/browser-automation test suite** — RES-5 scope per the approved plan. One manual headless-Chrome screenshot of the login page was captured for this summary (see chat); authenticated-page screenshots would require a scripted login session, not attempted here to stay within RES-2's scope.
 - **`docker-compose.yml`'s pre-existing `apps/*` path-resolution issue remains unfixed** — see §10.7's updated account; still out of scope, still not a regression.
-- **Webhook coverage is RFI-only** — DrawingVersion/Submittal webhook coverage is explicitly RES-3 scope.
+- **Webhook coverage is RFI-only as of RES-2** — DrawingVersion/Submittal webhook coverage was floated for RES-3; see §12.9 for what RES-3 actually shipped (Submittal, not DrawingVersion) and why.
+
+---
+
+## 12. Phase 5 — Reference Engineering System: RES-3
+
+**Task given:** implement the approved RES-3 Implementation Contract — Submittals (parent/child revisioning per ADR-004), a configuration-driven procurement-release gate (ADR-003), Submittal Packages (ADR-005), Vendors, minimal Commitments, the spec-driven Submittal Register, and the corresponding frontend — preceded by a review of `The Enterprise Fidelity Review.md`, `Canonical_Demo_Dataset.md`, and every frozen/reference document to confirm no entity introduced required a new domain model outside those two sources (see the entity-verification turn preceding this contract; full detail there, not repeated here).
+
+### 12.1 Architectural summary
+
+Three ADRs govern this milestone's structural decisions, all recorded as their own files (`docs/adr/ADR-003.md`, `ADR-004.md`, `ADR-005.md`) matching the existing ADR-001/002 precedent:
+
+- **ADR-003** — `SubmittalReviewStatus` is a seeded, project-scoped config table (`code, label, gates_procurement, is_terminal, sort_order`), not a closed Python enum like `RFI.status`/`DrawingVersion.status`. The domain state machine (`domain/state_machines/submittal_transitions.py`) enforces transition *shapes* generically off the `is_terminal`/`gates_procurement` booleans — it never matches a specific status code, so the whole gate mechanism works for any customer-configured vocabulary, not just the nine seeded defaults.
+- **ADR-004** — `Submittal` (envelope: project, spec_section, package, vendor, commitment, lead time) + `SubmittalRevision` (per-revision: review_status, ball_in_court, equipment fields, drawing/location refs) — the same parent/child pattern already proven for `Drawing`/`DrawingVersion` in RES-1, applied here because Intelligence Spec §13's canonical demo trigger requires diffing one revision's equipment schedule against the prior one, which a scalar `rev` field (the frozen doc's literal depiction) cannot support.
+- **ADR-005** — `SubmittalPackage` is a new grouping entity sourced from the Fidelity Review (absent from `The Reference Engineering System.md`'s entity list). Implemented as a real, functional table; `submittals.package_id` is nullable and the seed data instantiates zero packages, matching `Canonical_Demo_Dataset.md`'s own scoping.
+
+Vendor/Commitment stayed deliberately minimal — no `lifecycle_position`, no fabrication/shipped tracking — per the entity verification's finding that rich, lifecycle-bearing PO records (the Enterprise Fidelity Review's `po_5201`/`po_5202`/`req_5203`) belong entirely to the not-yet-built Reference Commercial System, never to RES-3's own domain model. `SUB-118`'s `commitment_id` is `NULL` in seed data for exactly this reason.
+
+### 12.2 Migration summary
+
+Four new migrations, verified from a completely empty database (both an ad-hoc local Postgres and, separately, inside the actual `reference-engineering-db` container) alongside `0001`–`0006`:
+
+| # | Contents |
+|---|---|
+| `0007` | `vendors`, `commitments` |
+| `0008` | `submittal_packages` (ADR-005), `submittal_review_statuses` (ADR-003) |
+| `0009` | `submittals`, `submittal_revisions` (ADR-004), `submittal_drawing_refs`, `submittal_location_refs` |
+| `0010` | `submittal_requirements` (the spec-driven register) |
+
+Schema-vs-ORM-metadata diff confirmed an exact match after all ten migrations, using the same method established in RES-1.
+
+### 12.3 API endpoints
+
+```
+GET   /rest/v1.0/projects/{project_id}/submittals
+GET   /rest/v1.0/projects/{project_id}/submittals/{submittal_id}
+GET   /rest/v1.0/projects/{project_id}/submittals/{submittal_id}/revisions
+GET   /rest/v1.0/projects/{project_id}/submittals/revisions/{revision_id}
+PATCH /rest/v1.0/projects/{project_id}/submittals/{submittal_id}/revisions/{revision_id}/disposition
+GET   /rest/v1.0/projects/{project_id}/vendors
+GET   /rest/v1.0/projects/{project_id}/submittal_requirements
+GET   /rest/v1.0/spec_divisions
+```
+
+All mounted in the existing rate-limited `_rest` router group — inherited `enforce_rate_limit`, `PageParams`/`paginate()`, and `ActingContext.require_scope()` automatically, with zero new cross-cutting code. `/spec_divisions` is global (no `project_id` — `SpecDivision` has no such column) and requires authentication but no resource-scope check, since `PermissionScope` binds to a project and CSI MasterFormat divisions are shared reference data.
+
+### 12.4 Frontend functionality
+
+| Route | What it shows |
+|---|---|
+| `/projects/[id]/submittals` | Register: number, spec section, ball-in-court, gate-colored status badge (green when `gates_procurement`, red when not — never keyed to a specific status code, per ADR-003), long-lead flag |
+| `/projects/[id]/submittals/[id]` | Revision timeline (mirrors Drawing Detail), equipment tag/manufacturer/model/capacity per revision, a long-lead warning banner, vendor |
+| `/projects/[id]/specifications` | CSI Division → Section tree, each section's submittal register requirements |
+
+Nav gained "Submittals" and "Specifications" links. `npm run build`/`lint` clean (TypeScript checked as part of `next build`).
+
+### 12.5 Seed data
+
+Extends `meridian_tower.py` exactly per `Canonical_Demo_Dataset.md` §2–9 — Discipline `E`, SpecDivision `26`/SpecSection `26 24 13`, SpecSection `23 74 13`, three new Locations (Level 1, Level 1 Electrical Room, Roof), three new Vendors (Coastal Aire Equipment, Voltrex Switchgear Inc., Ferro Electrical Supply — the latter two unused by any Commitment in RES-3, seeded for continuity per the canonical dataset's own instruction), nine `SubmittalReviewStatus` rows, and `SUB-118` seeded through its **real domain state machine** (create → `submit_revision` → `record_disposition`) for both Rev 0 (→ `REVISE_AND_RESUBMIT`, disposed by Kabir Mehta) and Rev 1 (→ `NO_EXCEPTIONS_TAKEN`, disposed by Rhea Fernandes) — not inserted pre-disposed, matching the discipline already established for RFI-214's own seeding. RFI-214 and all RES-1/RES-2 fixtures are untouched. A `submittals`/`update` webhook subscription was added alongside the existing `rfis`/`update` one.
+
+### 12.6 Webhook behavior
+
+`RecordSubmittalDisposition` dispatches on **every** disposition change — gating or blocking — exactly mirroring `CloseRFI`'s always-fire pattern, never rolling back the disposition itself on a delivery failure. **Verified against the actual running application, twice:** once via a real local HTTP receiver (independently-recomputed HMAC signature matched byte-for-byte, exact 5-key payload confirmed), and once inside the Docker Compose stack, where the seeded target (`localhost:9999`, unreachable from inside the container) produced the correct `FAILED`-but-recorded outcome in the Activity Feed without blocking the disposition's own 200 response — the identical resilience proof already established for RFI webhooks in RES-2, now confirmed for `resource_name="submittals"` too.
+
+### 12.7 Tests
+
+**20 new tests, 61 total, all passing** (verified twice in a row from a freshly-migrated, empty schema, confirming no hidden state dependency):
+- `tests/unit/domain/test_submittal_transitions.py` — `submit_revision`, `record_disposition` (gating → `ball_in_court="closed"`, blocking → `ball_in_court="submitter"`), terminal-status rejection, current-status-mismatch rejection.
+- `tests/unit/application/test_long_lead.py` — the pure `is_long_lead()` function, including both "not computable" (missing field) cases.
+- `tests/unit/application/test_submittal_use_cases.py` — `RecordSubmittalDisposition` against in-memory fakes, asserting the exact 5-key webhook payload and that both gating and blocking dispositions dispatch.
+- `tests/integration/test_submittal_repository.py` — real-Postgres round trip for `Submittal`/`SubmittalRevision`, confirming `gates_procurement` survives the repository boundary.
+- `tests/contract/test_submittal_webhook_and_gate.py` — full `TestClient(app)` + real DB: exact thin-payload shape, gating vs. blocking API response shape, 409 on re-disposing a terminal revision, `X-Total` pagination header.
+
+### 12.8 Bugs discovered and fixed during verification
+
+1. **A genuine test-design bug** (not a production bug): `test_record_disposition_rejects_mismatched_current_status` originally passed a *terminal* status as the deliberately-mismatched `current_status`, so it hit the (correct) terminal-check branch before ever exercising the mismatch-check branch it was meant to isolate. Fixed by introducing a second, non-terminal status (`SUBMITTED`) for that specific test.
+2. **A genuine test bug, caught only by running the suite against a truly empty schema**: the new contract tests hardcoded `disposed_by_user_id: 1`, which happened to succeed against the shared dev database only because a leftover row with `id=1` existed from earlier manual verification — against a fresh schema it failed with a foreign-key violation. Fixed by having `submittal_contract_fixture` create a real `User` row and having the tests reference its actual id. This is exactly the class of bug the "apply from a completely empty database" requirement exists to catch, and it did.
+
+No production code changes were required for either fix — both were test-fixture corrections.
+
+### 12.9 Remaining limitations
+
+- **DrawingVersion webhook coverage was not added** — the approved RES-3 Implementation Contract's file/endpoint list named only Submittal changes; an earlier planning-stage document had floated DrawingVersion too, but per the explicit instruction not to expand scope beyond the approved contract, only what the contract specified was built. Revisit in a future milestone if DrawingVersion-triggered events are needed.
+- **Submittal Package (ADR-005) is unused** — the entity is real and fully functional, but no seed data instantiates one, matching `Canonical_Demo_Dataset.md`'s own scope.
+- **`SubmittalReviewStatus` vocabulary has no admin/config API** — it's seeded, config-driven storage (ADR-003), but nothing lets a user add a custom status at runtime yet; "configurable" is honored at the storage layer, not via a live UI.
+- **No Design Change, Field Issue, ClashItem, Transmittal, ScheduleActivity, or ModelObject** — all remain RES-4/RES-5 scope per the approved RES-3 plan's re-scoping (§3 of that plan).
+- **Scenario B ("The HVAC Upsize") is only half-producible** — RES-3 makes the Submittal-side trigger (`SUB-118` Rev 1 → `NO_EXCEPTIONS_TAKEN`) real and API-visible, exactly matching Intelligence Spec §13's canonical demo walkthrough's own starting condition. The commercial-side artifacts it should eventually resolve to (`po_5201`, `po_5202`, `req_5203`) remain specification-only in `Canonical_Demo_Dataset.md` §10, pending the Reference Commercial System.
+- **`docker-compose.yml`'s pre-existing `apps/*` path issue remains unfixed** — unchanged from RES-2, still out of scope.
+
+### 12.10 How to verify this state yourself
+
+```bash
+cd reference-systems/reference-engineering-system/backend
+.venv/Scripts/python -m alembic upgrade head
+.venv/Scripts/python -m pytest -q
+# expected: 61 passed
+```
+
+```bash
+docker compose -f infra/docker-compose.yml up -d --build reference-engineering-db reference-engineering-backend reference-engineering-frontend
+docker exec <backend-container> python -m alembic upgrade head
+docker exec <backend-container> python -m seed.run_seed
+curl http://localhost:8000/rest/v1.0/projects/1/submittals   # (with an Authorization header — see backend/README.md)
+curl http://localhost:3100/projects/1/submittals
+```

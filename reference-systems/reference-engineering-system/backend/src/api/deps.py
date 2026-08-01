@@ -22,6 +22,15 @@ from application.use_cases.oauth_use_cases import IssueTokenFromAuthorizationCod
 from application.use_cases.project_use_cases import GetProject, ListProjects
 from application.use_cases.rfi_use_cases import CloseRFI, GetRFI, ListRFIs, RespondToRFI
 from application.use_cases.spec_use_cases import ListSpecDivisions, ListSpecSections
+from application.use_cases.submittal_requirement_use_cases import ListSubmittalRequirements
+from application.use_cases.submittal_use_cases import (
+    GetSubmittal,
+    GetSubmittalRevision,
+    ListSubmittalRevisions,
+    ListSubmittals,
+    RecordSubmittalDisposition,
+)
+from application.use_cases.vendor_use_cases import ListVendors
 from application.use_cases.webhook_use_cases import (
     ListActivity,
     ListWebhookSubscriptions,
@@ -49,11 +58,22 @@ from infrastructure.persistence.repositories.sqlalchemy_spec_repository import (
     SqlAlchemySpecDivisionRepository,
     SqlAlchemySpecSectionRepository,
 )
+from infrastructure.persistence.repositories.sqlalchemy_submittal_repository import (
+    SqlAlchemySubmittalPackageRepository,
+    SqlAlchemySubmittalRepository,
+    SqlAlchemySubmittalRequirementRepository,
+    SqlAlchemySubmittalReviewStatusRepository,
+    SqlAlchemySubmittalRevisionRepository,
+)
 from infrastructure.persistence.repositories.sqlalchemy_user_repository import (
     SqlAlchemyIntegrationUserRepository,
     SqlAlchemyOAuthClientRepository,
     SqlAlchemyOAuthTokenRepository,
     SqlAlchemyUserRepository,
+)
+from infrastructure.persistence.repositories.sqlalchemy_vendor_repository import (
+    SqlAlchemyCommitmentRepository,
+    SqlAlchemyVendorRepository,
 )
 from infrastructure.persistence.repositories.sqlalchemy_webhook_repository import (
     SqlAlchemyWebhookDeliveryRepository,
@@ -129,6 +149,13 @@ get_oauth_token_repo = _repo_provider(SqlAlchemyOAuthTokenRepository)
 get_webhook_subscription_repo = _repo_provider(SqlAlchemyWebhookSubscriptionRepository)
 get_webhook_delivery_repo = _repo_provider(SqlAlchemyWebhookDeliveryRepository)
 get_rate_limit_store = _repo_provider(RateLimitStore)
+get_vendor_repo = _repo_provider(SqlAlchemyVendorRepository)
+get_commitment_repo = _repo_provider(SqlAlchemyCommitmentRepository)
+get_submittal_package_repo = _repo_provider(SqlAlchemySubmittalPackageRepository)
+get_submittal_review_status_repo = _repo_provider(SqlAlchemySubmittalReviewStatusRepository)
+get_submittal_requirement_repo = _repo_provider(SqlAlchemySubmittalRequirementRepository)
+get_submittal_repo = _repo_provider(SqlAlchemySubmittalRepository)
+get_submittal_revision_repo = _repo_provider(SqlAlchemySubmittalRevisionRepository)
 
 
 # ---------------------------------------------------------------------------
@@ -208,6 +235,52 @@ def get_list_webhook_subscriptions(
 
 def get_list_activity(repo=Depends(get_webhook_delivery_repo)) -> ListActivity:
     return ListActivity(repo)
+
+
+def get_list_vendors(repo=Depends(get_vendor_repo)) -> ListVendors:
+    return ListVendors(repo)
+
+
+def get_list_submittal_requirements(
+    repo=Depends(get_submittal_requirement_repo),
+) -> ListSubmittalRequirements:
+    return ListSubmittalRequirements(repo)
+
+
+def get_list_submittals(repo=Depends(get_submittal_repo)) -> ListSubmittals:
+    return ListSubmittals(repo)
+
+
+def get_get_submittal(repo=Depends(get_submittal_repo)) -> GetSubmittal:
+    return GetSubmittal(repo)
+
+
+def get_list_submittal_revisions(repo=Depends(get_submittal_revision_repo)) -> ListSubmittalRevisions:
+    return ListSubmittalRevisions(repo)
+
+
+def get_get_submittal_revision(repo=Depends(get_submittal_revision_repo)) -> GetSubmittalRevision:
+    return GetSubmittalRevision(repo)
+
+
+def get_record_submittal_disposition(
+    submittal_repo=Depends(get_submittal_repo),
+    revision_repo=Depends(get_submittal_revision_repo),
+    review_status_repo=Depends(get_submittal_review_status_repo),
+    clock=Depends(get_clock),
+    webhook_subscription_repo=Depends(get_webhook_subscription_repo),
+    webhook_delivery_repo=Depends(get_webhook_delivery_repo),
+    webhook_dispatcher=Depends(get_webhook_dispatcher),
+) -> RecordSubmittalDisposition:
+    return RecordSubmittalDisposition(
+        submittal_repo,
+        revision_repo,
+        review_status_repo,
+        clock,
+        webhook_subscription_repo,
+        webhook_delivery_repo,
+        webhook_dispatcher,
+    )
 
 
 def get_login_user(

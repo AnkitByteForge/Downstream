@@ -11,7 +11,11 @@ from api.v1 import (
     oauth,
     projects,
     rfis,
+    spec_divisions,
     spec_sections,
+    submittal_requirements,
+    submittals,
+    vendors,
     webhook_subscriptions,
 )
 
@@ -25,8 +29,12 @@ _rest = APIRouter(prefix="/rest/v1.0", dependencies=[Depends(enforce_rate_limit)
 _rest.include_router(projects.router)
 _rest.include_router(locations.router)
 _rest.include_router(spec_sections.router)
+_rest.include_router(spec_divisions.router)
 _rest.include_router(documents.router)
 _rest.include_router(rfis.router)
+_rest.include_router(submittals.router)
+_rest.include_router(vendors.router)
+_rest.include_router(submittal_requirements.router)
 _rest.include_router(activity.router)
 api_router.include_router(_rest)
 

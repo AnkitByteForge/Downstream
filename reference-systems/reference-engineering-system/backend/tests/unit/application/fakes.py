@@ -5,7 +5,13 @@ from datetime import datetime, timezone
 
 from application.ports import ClockPort, WebhookDispatcherPort
 from domain.entities import RFI, WebhookDelivery, WebhookSubscription
+from domain.entities.submittal import Submittal, SubmittalReviewStatus, SubmittalRevision
 from domain.repositories import RFIRepository, WebhookDeliveryRepository, WebhookSubscriptionRepository
+from domain.repositories.submittal_repository import (
+    SubmittalRepository,
+    SubmittalReviewStatusRepository,
+    SubmittalRevisionRepository,
+)
 
 
 class FakeClock(ClockPort):
@@ -80,6 +86,67 @@ class InMemoryWebhookDeliveryRepository(WebhookDeliveryRepository):
 
     def list_by_project(self, project_id: int, limit: int) -> list[WebhookDelivery]:
         return [d for d in self.rows if d.project_id == project_id][:limit]
+
+
+class InMemorySubmittalRepository(SubmittalRepository):
+    def __init__(self, seeded: list[Submittal] | None = None) -> None:
+        self._rows: dict[int, Submittal] = {s.id: s for s in (seeded or [])}
+        self._next_id = max(self._rows, default=0) + 1
+
+    def add(self, submittal: Submittal) -> Submittal:
+        submittal = replace(submittal, id=self._next_id)
+        self._rows[submittal.id] = submittal
+        self._next_id += 1
+        return submittal
+
+    def get(self, submittal_id: int) -> Submittal | None:
+        return self._rows.get(submittal_id)
+
+    def list_by_project(self, project_id: int) -> list[Submittal]:
+        return [s for s in self._rows.values() if s.project_id == project_id]
+
+
+class InMemorySubmittalRevisionRepository(SubmittalRevisionRepository):
+    def __init__(self, seeded: list[SubmittalRevision] | None = None) -> None:
+        self._rows: dict[int, SubmittalRevision] = {r.id: r for r in (seeded or [])}
+        self._next_id = max(self._rows, default=0) + 1
+
+    def add(self, revision: SubmittalRevision) -> SubmittalRevision:
+        revision = replace(revision, id=self._next_id)
+        self._rows[revision.id] = revision
+        self._next_id += 1
+        return revision
+
+    def update(self, revision: SubmittalRevision) -> SubmittalRevision:
+        self._rows[revision.id] = revision
+        return revision
+
+    def get(self, revision_id: int) -> SubmittalRevision | None:
+        return self._rows.get(revision_id)
+
+    def list_by_submittal(self, submittal_id: int) -> list[SubmittalRevision]:
+        return [r for r in self._rows.values() if r.submittal_id == submittal_id]
+
+
+class InMemorySubmittalReviewStatusRepository(SubmittalReviewStatusRepository):
+    def __init__(self, seeded: list[SubmittalReviewStatus] | None = None) -> None:
+        self._rows: dict[int, SubmittalReviewStatus] = {s.id: s for s in (seeded or [])}
+
+    def add(self, status: SubmittalReviewStatus) -> SubmittalReviewStatus:
+        self._rows[status.id] = status
+        return status
+
+    def get(self, status_id: int) -> SubmittalReviewStatus | None:
+        return self._rows.get(status_id)
+
+    def get_by_code(self, project_id: int, code: str) -> SubmittalReviewStatus | None:
+        for s in self._rows.values():
+            if s.project_id == project_id and s.code == code:
+                return s
+        return None
+
+    def list_by_project(self, project_id: int) -> list[SubmittalReviewStatus]:
+        return [s for s in self._rows.values() if s.project_id == project_id]
 
 
 class FakeWebhookDispatcher(WebhookDispatcherPort):
