@@ -18,6 +18,7 @@ def list_spec_sections(
     ctx: ActingContext = Depends(get_acting_context),
     page_params: PageParams = Depends(),
 ) -> list[SpecSectionOut]:
+    ctx.require_project(project_id)
     if not ctx.can_see("spec_sections"):
         response.headers["X-Total"] = "0"
         return []

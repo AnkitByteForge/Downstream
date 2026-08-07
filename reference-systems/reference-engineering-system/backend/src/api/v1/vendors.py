@@ -18,6 +18,7 @@ def list_vendors(
     ctx: ActingContext = Depends(get_acting_context),
     page_params: PageParams = Depends(),
 ) -> list[VendorOut]:
+    ctx.require_project(project_id)
     if not ctx.can_see("vendors"):
         response.headers["X-Total"] = "0"
         return []

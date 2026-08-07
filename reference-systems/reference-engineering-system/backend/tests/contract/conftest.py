@@ -246,6 +246,10 @@ def submittal_contract_fixture():
                 rev_label="Rev 0",
                 review_status_id=pending.id,
                 ball_in_court=BallInCourt("submitter", None),
+                capacity_value=240,
+                capacity_unit="A_MCA",
+                fla_value=200,
+                fla_unit="A_FLA",
             )
         )
         subscription = subscription_repo.add(

@@ -106,3 +106,22 @@ def test_submittals_list_paginates_with_x_total_header(submittal_contract_fixtur
     assert response.status_code == 200
     assert response.headers["X-Total"] == "1"
     assert len(response.json()) == 1
+
+
+def test_submittal_revision_response_exposes_mca_and_fla(submittal_contract_fixture):
+    """SUB-118's canonical MCA and FLA are both first-class revision fields
+    and must round-trip through the API (ADR-006)."""
+    client = TestClient(app)
+    response = client.get(
+        f"/rest/v1.0/projects/{submittal_contract_fixture['project_id']}"
+        f"/submittals/{submittal_contract_fixture['submittal_id']}/revisions",
+        headers=_headers(submittal_contract_fixture),
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 1
+    rev = body[0]
+    assert rev["capacity_value"] == 240
+    assert rev["capacity_unit"] == "A_MCA"
+    assert rev["fla_value"] == 200
+    assert rev["fla_unit"] == "A_FLA"

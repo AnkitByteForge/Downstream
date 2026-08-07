@@ -34,6 +34,8 @@ class SubmittalRevisionOut(BaseModel):
     model: str | None
     capacity_value: float | None
     capacity_unit: str | None
+    fla_value: float | None
+    fla_unit: str | None
     submitted_at: datetime | None
     disposed_by_user_id: int | None
     disposition_at: datetime | None

@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from api.deps import (
     ActingContext,
+    ensure_resource_in_project,
     get_acting_context,
     get_clock,
     get_get_submittal,
@@ -68,6 +69,8 @@ def _revision_out(r: SubmittalRevision, review_status_repo) -> SubmittalRevision
         model=r.model,
         capacity_value=r.capacity_value,
         capacity_unit=r.capacity_unit,
+        fla_value=r.fla_value,
+        fla_unit=r.fla_unit,
         submitted_at=r.submitted_at,
         disposed_by_user_id=r.disposed_by_user_id,
         disposition_at=r.disposition_at,
@@ -85,6 +88,7 @@ def list_submittals(
     page_params: PageParams = Depends(),
     clock=Depends(get_clock),
 ) -> list[SubmittalOut]:
+    ctx.require_project(project_id)
     if not ctx.can_see("submittals"):
         response.headers["X-Total"] = "0"
         return []
@@ -101,9 +105,12 @@ def get_submittal(
     ctx: ActingContext = Depends(get_acting_context),
     clock=Depends(get_clock),
 ) -> SubmittalOut:
+    ctx.require_project(project_id)
     ctx.require_scope("submittals")
     try:
-        return _submittal_out(use_case.execute(submittal_id), clock)
+        submittal = use_case.execute(submittal_id)
+        ensure_resource_in_project(submittal.project_id, project_id)
+        return _submittal_out(submittal, clock)
     except NotFound as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
 
@@ -116,11 +123,20 @@ def list_submittal_revisions(
     project_id: int,
     submittal_id: int,
     use_case: ListSubmittalRevisions = Depends(get_list_submittal_revisions),
+    get_use_case: GetSubmittal = Depends(get_get_submittal),
     ctx: ActingContext = Depends(get_acting_context),
     review_status_repo=Depends(get_submittal_review_status_repo),
 ) -> list[SubmittalRevisionOut]:
+    ctx.require_project(project_id)
     if not ctx.can_see("submittals"):
         return []
+    try:
+        # The revisions use case lists by submittal_id, not project_id, so the
+        # parent submittal itself must be proven to belong to this project.
+        parent = get_use_case.execute(submittal_id)
+        ensure_resource_in_project(parent.project_id, project_id)
+    except NotFound as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
     return [_revision_out(r, review_status_repo) for r in use_case.execute(submittal_id)]
 
 
@@ -132,12 +148,19 @@ def get_submittal_revision(
     project_id: int,
     revision_id: int,
     use_case: GetSubmittalRevision = Depends(get_get_submittal_revision),
+    get_use_case: GetSubmittal = Depends(get_get_submittal),
     ctx: ActingContext = Depends(get_acting_context),
     review_status_repo=Depends(get_submittal_review_status_repo),
 ) -> SubmittalRevisionOut:
+    ctx.require_project(project_id)
     ctx.require_scope("submittals")
     try:
-        return _revision_out(use_case.execute(revision_id), review_status_repo)
+        revision = use_case.execute(revision_id)
+        # SubmittalRevision has no project of its own — resolve its parent
+        # submittal and prove that belongs to this project.
+        parent = get_use_case.execute(revision.submittal_id)
+        ensure_resource_in_project(parent.project_id, project_id)
+        return _revision_out(revision, review_status_repo)
     except NotFound as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
 
@@ -152,13 +175,17 @@ def record_submittal_disposition(
     revision_id: int,
     body: RecordSubmittalDispositionIn,
     use_case: RecordSubmittalDisposition = Depends(get_record_submittal_disposition),
+    get_use_case: GetSubmittal = Depends(get_get_submittal),
     ctx: ActingContext = Depends(get_acting_context),
     review_status_repo=Depends(get_submittal_review_status_repo),
 ) -> SubmittalRevisionOut:
     """Always fires a webhook (resource_name="submittals", event_type="update")
     on any disposition change — mirrors CloseRFI's dispatch pattern exactly."""
+    ctx.require_project(project_id)
     ctx.require_scope("submittals")
     try:
+        parent = get_use_case.execute(submittal_id)
+        ensure_resource_in_project(parent.project_id, project_id)
         revision = use_case.execute(revision_id, body.review_status_code, body.disposed_by_user_id)
         return _revision_out(revision, review_status_repo)
     except NotFound as exc:

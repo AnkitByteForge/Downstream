@@ -350,6 +350,8 @@ def seed(session: Session) -> dict:
             model="CA-RTU-40",
             capacity_value=180,
             capacity_unit="A_MCA",
+            fla_value=150,
+            fla_unit="A_FLA",
         )
     )
     rev_0 = revision_repo.update(
@@ -377,6 +379,8 @@ def seed(session: Session) -> dict:
             model="CA-RTU-55",
             capacity_value=240,
             capacity_unit="A_MCA",
+            fla_value=200,
+            fla_unit="A_FLA",
         )
     )
     rev_1 = revision_repo.update(

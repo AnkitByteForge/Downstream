@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from api.deps import (
     ActingContext,
+    ensure_resource_in_project,
     get_acting_context,
     get_get_drawing,
     get_get_drawing_version,
@@ -45,6 +46,7 @@ def list_documents(
     ctx: ActingContext = Depends(get_acting_context),
     page_params: PageParams = Depends(),
 ) -> list[DrawingOut]:
+    ctx.require_project(project_id)
     if not ctx.can_see("documents"):
         response.headers["X-Total"] = "0"
         return []
@@ -60,9 +62,12 @@ def get_document(
     use_case: GetDrawing = Depends(get_get_drawing),
     ctx: ActingContext = Depends(get_acting_context),
 ) -> DrawingOut:
+    ctx.require_project(project_id)
     ctx.require_scope("documents")
     try:
-        return DrawingOut(**vars(use_case.execute(drawing_id)))
+        drawing = use_case.execute(drawing_id)
+        ensure_resource_in_project(drawing.project_id, project_id)
+        return DrawingOut(**vars(drawing))
     except NotFound as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
 
@@ -75,10 +80,19 @@ def list_document_versions(
     project_id: int,
     drawing_id: int,
     use_case: ListDrawingVersions = Depends(get_list_drawing_versions),
+    get_use_case: GetDrawing = Depends(get_get_drawing),
     ctx: ActingContext = Depends(get_acting_context),
 ) -> list[DrawingVersionOut]:
+    ctx.require_project(project_id)
     if not ctx.can_see("documents"):
         return []
+    try:
+        # The versions use case lists by drawing_id, not project_id, so the
+        # parent drawing must be proven to belong to this project.
+        parent = get_use_case.execute(drawing_id)
+        ensure_resource_in_project(parent.project_id, project_id)
+    except NotFound as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
     return [_version_out(v) for v in use_case.execute(drawing_id)]
 
 
@@ -90,12 +104,19 @@ def get_document_version(
     project_id: int,
     version_id: int,
     use_case: GetDrawingVersion = Depends(get_get_drawing_version),
+    get_use_case: GetDrawing = Depends(get_get_drawing),
     ctx: ActingContext = Depends(get_acting_context),
 ) -> DrawingVersionOut:
     """Resolves a single version by its own id — needed because RFIs and other
     referencing entities cite a DrawingVersion directly, not its parent Drawing."""
+    ctx.require_project(project_id)
     ctx.require_scope("documents")
     try:
-        return _version_out(use_case.execute(version_id))
+        version = use_case.execute(version_id)
+        # DrawingVersion has no project of its own — resolve the parent
+        # drawing and prove it belongs to this project.
+        parent = get_use_case.execute(version.drawing_id)
+        ensure_resource_in_project(parent.project_id, project_id)
+        return _version_out(version)
     except NotFound as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc

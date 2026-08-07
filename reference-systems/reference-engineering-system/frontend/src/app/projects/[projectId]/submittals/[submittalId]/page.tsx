@@ -115,7 +115,9 @@ export default function SubmittalDetailPage({
                         <p className="mt-1 text-sm text-muted-foreground">
                           {revision.equipment_tag} — {revision.manufacturer} {revision.model}
                           {revision.capacity_value != null &&
-                            ` — ${revision.capacity_value} ${revision.capacity_unit ?? ""}`}
+                            ` — MCA ${revision.capacity_value} ${revision.capacity_unit ?? ""}`}
+                          {revision.fla_value != null &&
+                            ` / FLA ${revision.fla_value} ${revision.fla_unit ?? ""}`}
                         </p>
                       )}
                     </li>

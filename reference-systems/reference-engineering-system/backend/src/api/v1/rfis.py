@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from api.deps import (
     ActingContext,
+    ensure_resource_in_project,
     get_acting_context,
     get_close_rfi,
     get_get_rfi,
@@ -51,6 +52,7 @@ def list_rfis(
     ctx: ActingContext = Depends(get_acting_context),
     page_params: PageParams = Depends(),
 ) -> list[RFIOut]:
+    ctx.require_project(project_id)
     if not ctx.can_see("rfis"):
         response.headers["X-Total"] = "0"
         return []
@@ -66,9 +68,12 @@ def get_rfi(
     use_case: GetRFI = Depends(get_get_rfi),
     ctx: ActingContext = Depends(get_acting_context),
 ) -> RFIOut:
+    ctx.require_project(project_id)
     ctx.require_scope("rfis")
     try:
-        return _rfi_out(use_case.execute(rfi_id))
+        rfi = use_case.execute(rfi_id)
+        ensure_resource_in_project(rfi.project_id, project_id)
+        return _rfi_out(rfi)
     except NotFound as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
 
@@ -79,10 +84,17 @@ def respond_to_rfi(
     rfi_id: int,
     body: RespondToRFIIn,
     use_case: RespondToRFI = Depends(get_respond_to_rfi),
+    get_use_case: GetRFI = Depends(get_get_rfi),
     ctx: ActingContext = Depends(get_acting_context),
 ) -> RFIOut:
+    ctx.require_project(project_id)
     ctx.require_scope("rfis")
     try:
+        # Confirm the RFI belongs to the requested project before mutating it,
+        # so a caller can never change another project's record via their own
+        # project path.
+        existing = get_use_case.execute(rfi_id)
+        ensure_resource_in_project(existing.project_id, project_id)
         return _rfi_out(use_case.execute(rfi_id, body.response_text, body.manager_user_id))
     except NotFound as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
@@ -96,12 +108,16 @@ def close_rfi(
     rfi_id: int,
     body: CloseRFIIn,
     use_case: CloseRFI = Depends(get_close_rfi),
+    get_use_case: GetRFI = Depends(get_get_rfi),
     ctx: ActingContext = Depends(get_acting_context),
 ) -> RFIOut:
     """The transition the entire Reference Execution Trace begins from
     (Phase 0). Thin webhook dispatch on this transition is RES-2 scope."""
+    ctx.require_project(project_id)
     ctx.require_scope("rfis")
     try:
+        existing = get_use_case.execute(rfi_id)
+        ensure_resource_in_project(existing.project_id, project_id)
         return _rfi_out(use_case.execute(rfi_id, body.response_text))
     except NotFound as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc

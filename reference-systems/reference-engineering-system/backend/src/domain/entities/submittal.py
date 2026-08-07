@@ -76,6 +76,14 @@ class SubmittalRevision:
     model: str | None = None
     capacity_value: float | None = None
     capacity_unit: str | None = None
+    # MCA and FLA are explicit, nullable, first-class engineering fields on the
+    # revision (ADR-006). Kept as a scalar pair mirroring capacity_value/unit —
+    # deliberately NOT a generic electrical-properties framework, because the
+    # canonical Scenario B demo (SUB-118 Rev 0 -> Rev 1) diffs exactly these
+    # two values (180A/150A -> 240A/200A) across revisions. Nullable so
+    # non-electrical submittals or revisions where FLA is unknown remain valid.
+    fla_value: float | None = None
+    fla_unit: str | None = None
     submitted_at: datetime | None = None
     disposed_by_user_id: int | None = None
     disposition_at: datetime | None = None

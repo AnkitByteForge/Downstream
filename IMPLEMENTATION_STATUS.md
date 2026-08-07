@@ -1,6 +1,6 @@
 # Downstream — Implementation Status
 
-**Last updated:** 2026-08-02 (RES-3)
+**Last updated:** 2026-08-07 (RES-3 + PRE-RES-4 stabilization)
 **Purpose of this document:** a single reference for exactly what has been built so far, in what order, and why — so any future session (human or agent) can pick up work without re-deriving decisions already made. This file is a living status record, not a frozen design document; it does not belong in `/docs` and carries no architectural authority of its own. If it ever disagrees with `/docs`, `/docs` wins.
 
 ---
@@ -537,7 +537,7 @@ No production code changes were required for either fix — both were test-fixtu
 cd reference-systems/reference-engineering-system/backend
 .venv/Scripts/python -m alembic upgrade head
 .venv/Scripts/python -m pytest -q
-# expected: 61 passed
+# expected: 82 passed
 ```
 
 ```bash
@@ -547,3 +547,85 @@ docker exec <backend-container> python -m seed.run_seed
 curl http://localhost:8000/rest/v1.0/projects/1/submittals   # (with an Authorization header — see backend/README.md)
 curl http://localhost:3100/projects/1/submittals
 ```
+---
+
+## 13. PRE-RES-4 stabilization (2026-08-07)
+
+A small, focused stabilization patch applied *before* RES-4 begins. This is
+**not** RES-4 — no Design Change / ASI / CCD / Bulletin, no DrawingVersion
+issuance/webhook, no new webhook behavior, no PDF ingestion / OCR / RAG. It
+corrects three defects found during the handoff review and adds the missing
+data-fidelity for Scenario B.
+
+### 13.1 Defects corrected
+
+- **Activity Feed was unauthenticated.** `GET /rest/v1.0/projects/{id}/activity`
+  previously had no `get_acting_context` dependency (only router-level rate
+  limiting, which is a no-op without a bearer token). Now it requires an
+  authenticated `ActingContext`, enforces project ownership, and enforces the
+  `activity` resource scope (under-scoped clients get an empty list).
+- **Project isolation was not actually enforced.** Every authenticated
+  project-scoped route now verifies the `ActingContext` belongs to the URL's
+  project (`ActingContext.require_project`). Get-by-id and mutation endpoints
+  additionally verify the fetched resource belongs to that project
+  (`ensure_resource_in_project`), so a caller can never reach or mutate
+  another project's record through their own project path. The project
+  catalog (`GET /projects`, `GET /projects/{id}`) now requires authentication
+  and only exposes the caller's own project, consistent with the rest of RES
+  (no frozen doc requires a public catalog; docs/03 mandates hard
+  project partitioning).
+- **SUB-118 lost FLA.** Only MCA was modeled (via `capacity_value`/unit,
+  seeded as `A_MCA`). FLA is now a first-class, nullable revision field.
+  Canonical values:
+
+  | Rev | MCA | FLA |
+  |---|---|---|
+  | Rev 0 | 180 A | 150 A |
+  | Rev 1 | 240 A | 200 A |
+
+### 13.2 ADR added
+
+- **ADR-006** — MCA and FLA are explicit, nullable, first-class engineering
+  fields on `SubmittalRevision` (a scalar pair mirroring `capacity_value`/
+  `capacity_unit`), deliberately **not** a generic electrical-properties
+  framework, per Canonical_Demo_Dataset.md's own "fields, not an entity"
+  directive. Backward compatible: existing rows stay NULL until a revision
+  supplies FLA.
+
+### 13.3 Migration added
+
+- **`0011_submittal_fla.py`** — adds `fla_value` (`Numeric(10,2)`, nullable)
+  and `fla_unit` (`String(20)`, nullable) to `submittal_revisions`.
+
+### 13.4 Tests added
+
+- `tests/unit/api/test_project_guards.py` — unit coverage of
+  `ActingContext.require_project` and `ensure_resource_in_project` (404-hide).
+- `tests/contract/test_project_isolation.py` — two-project fixture proving,
+  for **both** human-session and OAuth-integration auth: cross-project
+  get-by-id and list → 404; cross-project mutation → 404; resource-project
+  mismatch via one's own path → 404; project catalog requires auth and only
+  exposes one's own project; activity requires auth (401), same-project
+  succeeds (200), cross-project → 404, under-scoped integration → isolated.
+- `tests/contract/test_submittal_webhook_and_gate.py::test_submittal_revision_response_exposes_mca_and_fla`
+  — MCA+FLA round-trip through the API.
+- `tests/integration/test_submittal_repository.py` — extended round-trip to
+  assert FLA is persisted and read back.
+
+### 13.5 Final test counts
+
+Backend full suite: **82 passed** (unit + architecture + contract +
+integration) against a freshly migrated empty Postgres schema.
+
+Frontend: `npm run build` (includes TypeScript check) succeeds for all routes;
+the two changed TS/JSX files pass ESLint.
+
+### 13.6 Known limitations (unchanged from §12.9)
+
+- **DrawingVersion issuance/webhook gap** — intentionally **not** closed here;
+  it belongs to RES-4's `IssueDrawingVersion` use case.
+- All other §12.9 limitations (Submittal Package unused, no review-status
+  admin API, scenario B half-producible on the commercial side, the
+  `docker-compose.yml` `apps/*` path issue) are unchanged — out of scope for
+  this stabilization.
+

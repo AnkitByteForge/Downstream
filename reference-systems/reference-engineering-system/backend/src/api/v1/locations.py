@@ -18,6 +18,7 @@ def list_locations(
     ctx: ActingContext = Depends(get_acting_context),
     page_params: PageParams = Depends(),
 ) -> list[LocationOut]:
+    ctx.require_project(project_id)
     if not ctx.can_see("locations"):
         response.headers["X-Total"] = "0"
         return []

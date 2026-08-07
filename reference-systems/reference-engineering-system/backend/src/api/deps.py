@@ -346,6 +346,27 @@ class ActingContext:
         if not self.can_see(resource_type):
             raise HTTPException(status.HTTP_404_NOT_FOUND)
 
+    def require_project(self, project_id: int) -> None:
+        """Project ownership: the authenticated actor must belong to the
+        requested project. A mismatch yields 404 (not 403), preserving the
+        same hide-vs-forbid posture ``require_scope`` uses — a caller from
+        another project learns nothing about the resource's existence. This
+        is a route-layer guard only; tenancy is never pushed into domain
+        entities or application use cases."""
+        if self.project_id != project_id:
+            raise HTTPException(status.HTTP_404_NOT_FOUND)
+
+
+def ensure_resource_in_project(resource_project_id: int | None, path_project_id: int) -> None:
+    """Route-layer guard for get-by-id: the fetched resource must actually
+    belong to the project in the URL path. Without this, a caller who owns
+    project A could still reach project B's resource by id through their own
+    project's path (e.g. ``GET /projects/A/rfis/{rfi_of_B}``). Mirrors the
+    404-hide posture used everywhere else. ``None`` (resource unresolved)
+    is treated as a miss."""
+    if resource_project_id != path_project_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND)
+
 
 def get_acting_context(
     res_session: str | None = Cookie(default=None),

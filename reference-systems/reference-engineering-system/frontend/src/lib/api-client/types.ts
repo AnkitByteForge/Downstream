@@ -137,6 +137,8 @@ export interface SubmittalRevisionOut {
   model: string | null;
   capacity_value: number | null;
   capacity_unit: string | null;
+  fla_value: number | null;
+  fla_unit: string | null;
   submitted_at: string | null;
   disposed_by_user_id: number | null;
   disposition_at: string | null;

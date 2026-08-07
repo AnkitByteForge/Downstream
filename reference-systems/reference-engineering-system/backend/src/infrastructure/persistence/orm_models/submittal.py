@@ -88,6 +88,8 @@ class SubmittalRevisionModel(Base):
     model: Mapped[str | None] = mapped_column(String(80), nullable=True)
     capacity_value: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
     capacity_unit: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    fla_value: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
+    fla_unit: Mapped[str | None] = mapped_column(String(20), nullable=True)
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     disposed_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id"), nullable=True

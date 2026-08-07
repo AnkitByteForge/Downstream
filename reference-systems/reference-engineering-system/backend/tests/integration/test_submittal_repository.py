@@ -57,12 +57,20 @@ def test_submittal_revision_round_trip_including_gates_procurement(db_session):
             review_status_id=net.id,
             ball_in_court=BallInCourt("closed", None),
             equipment_tag="TEST-1",
+            capacity_value=240,
+            capacity_unit="A_MCA",
+            fla_value=200,
+            fla_unit="A_FLA",
         )
     )
 
     fetched = revision_repo.get(revision.id)
     assert fetched.equipment_tag == "TEST-1"
     assert fetched.review_status_id == net.id
+    assert fetched.capacity_value == 240
+    assert fetched.capacity_unit == "A_MCA"
+    assert fetched.fla_value == 200
+    assert fetched.fla_unit == "A_FLA"
 
     fetched_status = status_repo.get_by_code(project.id, "NO_EXCEPTIONS_TAKEN")
     assert fetched_status.gates_procurement is True

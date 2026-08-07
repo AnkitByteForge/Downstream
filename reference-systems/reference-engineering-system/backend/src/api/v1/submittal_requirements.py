@@ -21,6 +21,7 @@ def list_submittal_requirements(
     ctx: ActingContext = Depends(get_acting_context),
     page_params: PageParams = Depends(),
 ) -> list[SubmittalRequirementOut]:
+    ctx.require_project(project_id)
     if not ctx.can_see("submittal_requirements"):
         response.headers["X-Total"] = "0"
         return []
