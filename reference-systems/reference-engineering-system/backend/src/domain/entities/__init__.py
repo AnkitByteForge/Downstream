@@ -1,4 +1,5 @@
 from .drawing import Drawing, DrawingVersion
+from .design_change import DesignChange
 from .location import Location
 from .project import Discipline, Project
 from .rfi import RFI
@@ -17,6 +18,7 @@ from .webhook import WebhookDelivery, WebhookSubscription
 __all__ = [
     "Drawing",
     "DrawingVersion",
+    "DesignChange",
     "Location",
     "Discipline",
     "Project",
