@@ -1,3 +1,4 @@
+from .design_change_repository import DesignChangeRepository
 from .drawing_repository import DrawingRepository, DrawingVersionRepository
 from .location_repository import LocationRepository
 from .project_repository import DisciplineRepository, ProjectRepository
@@ -20,6 +21,7 @@ from .vendor_repository import CommitmentRepository, VendorRepository
 from .webhook_repository import WebhookDeliveryRepository, WebhookSubscriptionRepository
 
 __all__ = [
+    "DesignChangeRepository",
     "DrawingRepository",
     "DrawingVersionRepository",
     "LocationRepository",

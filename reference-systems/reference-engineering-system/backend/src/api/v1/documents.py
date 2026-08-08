@@ -8,6 +8,7 @@ from api.deps import (
     get_acting_context,
     get_get_drawing,
     get_get_drawing_version,
+    get_issue_drawing_version,
     get_list_drawing_versions,
     get_list_drawings,
 )
@@ -17,9 +18,11 @@ from application.exceptions import NotFound
 from application.use_cases.drawing_use_cases import (
     GetDrawing,
     GetDrawingVersion,
+    IssueDrawingVersion,
     ListDrawings,
     ListDrawingVersions,
 )
+from domain.exceptions import InvalidTransition
 
 router = APIRouter(tags=["documents"])
 
@@ -120,3 +123,32 @@ def get_document_version(
         return _version_out(version)
     except NotFound as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+
+
+@router.patch(
+    "/projects/{project_id}/documents/versions/{version_id}/issue",
+    response_model=DrawingVersionOut,
+)
+def issue_document_version(
+    project_id: int,
+    version_id: int,
+    use_case: IssueDrawingVersion = Depends(get_issue_drawing_version),
+    get_version_use_case: GetDrawingVersion = Depends(get_get_drawing_version),
+    get_drawing_use_case: GetDrawing = Depends(get_get_drawing),
+    ctx: ActingContext = Depends(get_acting_context),
+) -> DrawingVersionOut:
+    """Issues a DrawingVersion (DRAFT -> ISSUED), superseding the prior current
+    revision and repointing the Drawing at the newly issued version. Verifies
+    project ownership through the parent Drawing before mutating."""
+    ctx.require_project(project_id)
+    ctx.require_scope("documents")
+    try:
+        version = get_version_use_case.execute(version_id)
+        drawing = get_drawing_use_case.execute(version.drawing_id)
+        ensure_resource_in_project(drawing.project_id, project_id)
+        issued = use_case.execute(version_id)
+        return _version_out(issued)
+    except NotFound as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+    except InvalidTransition as exc:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc

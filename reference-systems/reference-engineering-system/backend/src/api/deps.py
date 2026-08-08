@@ -11,9 +11,17 @@ from sqlalchemy.orm import Session
 from application.exceptions import Unauthorized
 from application.ports import PasswordHasherPort, SessionTokenServicePort, WebhookDispatcherPort
 from application.use_cases.auth_use_cases import LoginUser
+from application.use_cases.design_change_use_cases import (
+    AcknowledgeDesignChange,
+    GetDesignChange,
+    IssueDesignChange,
+    ListDesignChanges,
+    VoidDesignChange,
+)
 from application.use_cases.drawing_use_cases import (
     GetDrawing,
     GetDrawingVersion,
+    IssueDrawingVersion,
     ListDrawings,
     ListDrawingVersions,
 )
@@ -46,6 +54,9 @@ from infrastructure.persistence.db import get_session
 from infrastructure.persistence.repositories.sqlalchemy_drawing_repository import (
     SqlAlchemyDrawingRepository,
     SqlAlchemyDrawingVersionRepository,
+)
+from infrastructure.persistence.repositories.sqlalchemy_design_change_repository import (
+    SqlAlchemyDesignChangeRepository,
 )
 from infrastructure.persistence.repositories.sqlalchemy_location_repository import (
     SqlAlchemyLocationRepository,
@@ -141,6 +152,7 @@ get_spec_division_repo = _repo_provider(SqlAlchemySpecDivisionRepository)
 get_spec_section_repo = _repo_provider(SqlAlchemySpecSectionRepository)
 get_drawing_repo = _repo_provider(SqlAlchemyDrawingRepository)
 get_drawing_version_repo = _repo_provider(SqlAlchemyDrawingVersionRepository)
+get_design_change_repo = _repo_provider(SqlAlchemyDesignChangeRepository)
 get_rfi_repo = _repo_provider(SqlAlchemyRFIRepository)
 get_user_repo = _repo_provider(SqlAlchemyUserRepository)
 get_integration_user_repo = _repo_provider(SqlAlchemyIntegrationUserRepository)
@@ -197,6 +209,58 @@ def get_list_drawing_versions(repo=Depends(get_drawing_version_repo)) -> ListDra
 
 def get_get_drawing_version(repo=Depends(get_drawing_version_repo)) -> GetDrawingVersion:
     return GetDrawingVersion(repo)
+
+
+def get_issue_drawing_version(
+    drawing_repo=Depends(get_drawing_repo),
+    version_repo=Depends(get_drawing_version_repo),
+    clock=Depends(get_clock),
+    webhook_subscription_repo=Depends(get_webhook_subscription_repo),
+    webhook_delivery_repo=Depends(get_webhook_delivery_repo),
+    webhook_dispatcher=Depends(get_webhook_dispatcher),
+) -> IssueDrawingVersion:
+    return IssueDrawingVersion(
+        drawing_repo,
+        version_repo,
+        clock,
+        webhook_subscription_repo,
+        webhook_delivery_repo,
+        webhook_dispatcher,
+    )
+
+
+def get_list_design_changes(repo=Depends(get_design_change_repo)) -> ListDesignChanges:
+    return ListDesignChanges(repo)
+
+
+def get_get_design_change(repo=Depends(get_design_change_repo)) -> GetDesignChange:
+    return GetDesignChange(repo)
+
+
+def get_issue_design_change(
+    repo=Depends(get_design_change_repo),
+    clock=Depends(get_clock),
+    webhook_subscription_repo=Depends(get_webhook_subscription_repo),
+    webhook_delivery_repo=Depends(get_webhook_delivery_repo),
+    webhook_dispatcher=Depends(get_webhook_dispatcher),
+) -> IssueDesignChange:
+    return IssueDesignChange(
+        repo, clock, webhook_subscription_repo, webhook_delivery_repo, webhook_dispatcher
+    )
+
+
+def get_acknowledge_design_change(
+    repo=Depends(get_design_change_repo),
+    clock=Depends(get_clock),
+) -> AcknowledgeDesignChange:
+    return AcknowledgeDesignChange(repo, clock)
+
+
+def get_void_design_change(
+    repo=Depends(get_design_change_repo),
+    clock=Depends(get_clock),
+) -> VoidDesignChange:
+    return VoidDesignChange(repo, clock)
 
 
 def get_list_rfis(repo=Depends(get_rfi_repo)) -> ListRFIs:

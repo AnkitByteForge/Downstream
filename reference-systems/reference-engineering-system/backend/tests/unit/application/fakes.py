@@ -5,8 +5,17 @@ from datetime import datetime, timezone
 
 from application.ports import ClockPort, WebhookDispatcherPort
 from domain.entities import RFI, WebhookDelivery, WebhookSubscription
+from domain.entities.design_change import DesignChange
+from domain.entities.drawing import Drawing, DrawingVersion
 from domain.entities.submittal import Submittal, SubmittalReviewStatus, SubmittalRevision
-from domain.repositories import RFIRepository, WebhookDeliveryRepository, WebhookSubscriptionRepository
+from domain.repositories import (
+    DesignChangeRepository,
+    DrawingRepository,
+    DrawingVersionRepository,
+    RFIRepository,
+    WebhookDeliveryRepository,
+    WebhookSubscriptionRepository,
+)
 from domain.repositories.submittal_repository import (
     SubmittalRepository,
     SubmittalReviewStatusRepository,
@@ -23,7 +32,7 @@ class FakeClock(ClockPort):
 
 
 class InMemoryRFIRepository(RFIRepository):
-    """Proves a use case is fully testable with zero database — the whole
+    """Proves a use case is fully testable with zero database ??? the whole
     point of the repository-port split in Clean Architecture."""
 
     def __init__(self) -> None:
@@ -151,7 +160,7 @@ class InMemorySubmittalReviewStatusRepository(SubmittalReviewStatusRepository):
 
 class FakeWebhookDispatcher(WebhookDispatcherPort):
     """Records every payload it was asked to send instead of making a real
-    HTTP call — lets a test assert the exact shape dispatched, per docs/04's
+    HTTP call ??? lets a test assert the exact shape dispatched, per docs/04's
     "the thin payload is the most important thing to get right"."""
 
     def __init__(self, always_succeed: bool = True) -> None:
@@ -161,3 +170,70 @@ class FakeWebhookDispatcher(WebhookDispatcherPort):
     def dispatch(self, subscription: WebhookSubscription, payload: dict) -> bool:
         self.calls.append((subscription, payload))
         return self.always_succeed
+
+
+class InMemoryDesignChangeRepository(DesignChangeRepository):
+    def __init__(self, seeded: list[DesignChange] | None = None) -> None:
+        self._rows: dict[int, DesignChange] = {c.id: c for c in (seeded or [])}
+        self._next_id = max(self._rows, default=0) + 1
+
+    def get(self, design_change_id: int) -> DesignChange | None:
+        return self._rows.get(design_change_id)
+
+    def list_by_project(self, project_id: int) -> list[DesignChange]:
+        return [c for c in self._rows.values() if c.project_id == project_id]
+
+    def add(self, design_change: DesignChange) -> DesignChange:
+        design_change = replace(design_change, id=self._next_id)
+        self._rows[design_change.id] = design_change
+        self._next_id += 1
+        return design_change
+
+    def update(self, design_change: DesignChange) -> DesignChange:
+        self._rows[design_change.id] = design_change
+        return design_change
+
+
+class InMemoryDrawingRepository(DrawingRepository):
+    def __init__(self, seeded: list[Drawing] | None = None) -> None:
+        self._rows: dict[int, Drawing] = {d.id: d for d in (seeded or [])}
+        self._next_id = max(self._rows, default=0) + 1
+
+    def get(self, drawing_id: int) -> Drawing | None:
+        return self._rows.get(drawing_id)
+
+    def list_by_project(self, project_id: int) -> list[Drawing]:
+        return [d for d in self._rows.values() if d.project_id == project_id]
+
+    def add(self, drawing: Drawing) -> Drawing:
+        drawing = replace(drawing, id=self._next_id)
+        self._rows[drawing.id] = drawing
+        self._next_id += 1
+        return drawing
+
+    def update(self, drawing: Drawing) -> Drawing:
+        self._rows[drawing.id] = drawing
+        return drawing
+
+
+class InMemoryDrawingVersionRepository(DrawingVersionRepository):
+    def __init__(self, seeded: list[DrawingVersion] | None = None) -> None:
+        self._rows: dict[int, DrawingVersion] = {v.id: v for v in (seeded or [])}
+        self._next_id = max(self._rows, default=0) + 1
+
+    def get(self, version_id: int) -> DrawingVersion | None:
+        return self._rows.get(version_id)
+
+    def list_by_drawing(self, drawing_id: int) -> list[DrawingVersion]:
+        return [v for v in self._rows.values() if v.drawing_id == drawing_id]
+
+    def add(self, version: DrawingVersion) -> DrawingVersion:
+        version = replace(version, id=self._next_id)
+        self._rows[version.id] = version
+        self._next_id += 1
+        return version
+
+    def update(self, version: DrawingVersion) -> DrawingVersion:
+        self._rows[version.id] = version
+        return version
+

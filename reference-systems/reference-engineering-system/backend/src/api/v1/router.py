@@ -6,6 +6,7 @@ from api.deps import enforce_rate_limit
 from api.v1 import (
     activity,
     auth,
+    design_changes,
     documents,
     locations,
     oauth,
@@ -31,6 +32,7 @@ _rest.include_router(locations.router)
 _rest.include_router(spec_sections.router)
 _rest.include_router(spec_divisions.router)
 _rest.include_router(documents.router)
+_rest.include_router(design_changes.router)
 _rest.include_router(rfis.router)
 _rest.include_router(submittals.router)
 _rest.include_router(vendors.router)

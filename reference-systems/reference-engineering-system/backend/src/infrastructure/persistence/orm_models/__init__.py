@@ -1,4 +1,10 @@
 from .base import Base
+from .design_change import (
+    DesignChangeModel,
+    design_change_drawing_version_refs,
+    design_change_location_refs,
+    design_change_spec_section_refs,
+)
 from .drawing import DrawingModel, DrawingVersionModel, RevisionCloudModel
 from .location import LocationModel
 from .project import DisciplineModel, ProjectModel
@@ -18,6 +24,10 @@ from .webhook import WebhookDeliveryModel, WebhookSubscriptionModel
 
 __all__ = [
     "Base",
+    "DesignChangeModel",
+    "design_change_drawing_version_refs",
+    "design_change_spec_section_refs",
+    "design_change_location_refs",
     "DrawingModel",
     "DrawingVersionModel",
     "RevisionCloudModel",
