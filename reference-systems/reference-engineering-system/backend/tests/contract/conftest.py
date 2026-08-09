@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from domain.entities import (
+    DesignChange,
     Discipline,
     IntegrationUser,
     OAuthClient,
@@ -24,6 +25,9 @@ from infrastructure.persistence.repositories.sqlalchemy_project_repository impor
     SqlAlchemyProjectRepository,
 )
 from infrastructure.persistence.repositories.sqlalchemy_rfi_repository import SqlAlchemyRFIRepository
+from infrastructure.persistence.repositories.sqlalchemy_design_change_repository import (
+    SqlAlchemyDesignChangeRepository,
+)
 from infrastructure.persistence.repositories.sqlalchemy_spec_repository import (
     SqlAlchemySpecDivisionRepository,
     SqlAlchemySpecSectionRepository,
@@ -43,6 +47,7 @@ from infrastructure.persistence.repositories.sqlalchemy_webhook_repository impor
     SqlAlchemyWebhookSubscriptionRepository,
 )
 from infrastructure.persistence.orm_models import (
+    DesignChangeModel,
     DisciplineModel,
     IntegrationUserModel,
     OAuthClientModel,
@@ -340,5 +345,217 @@ def submittal_contract_fixture():
         )
         session.execute(SpecDivisionModel.__table__.delete().where(SpecDivisionModel.number == "98"))
         session.execute(ProjectModel.__table__.delete().where(ProjectModel.id == project.id))
+        session.commit()
+        session.close()
+
+
+@pytest.fixture()
+def design_change_contract_fixture():
+    """Real, committed rows for the DesignChange contract tests — two
+    isolated projects, each owning a DRAFT DesignChange tied to a source RFI,
+    a design_changes/update webhook subscription (project A only), plus full-
+    and partial-scope integration credentials. Teardown deletes everything it
+    created, in FK-safe order."""
+    session = SessionLocal()
+    hasher = Pbkdf2PasswordHasher()
+    grade = {"tokens": [], "clients": [], "integration_users": []}
+    project_a = project_b = None
+    try:
+        project_repo = SqlAlchemyProjectRepository(session)
+        rfi_repo = SqlAlchemyRFIRepository(session)
+        design_change_repo = SqlAlchemyDesignChangeRepository(session)
+        subscription_repo = SqlAlchemyWebhookSubscriptionRepository(session)
+        integration_repo = SqlAlchemyIntegrationUserRepository(session)
+        client_repo = SqlAlchemyOAuthClientRepository(session)
+        token_repo = SqlAlchemyOAuthTokenRepository(session)
+
+        project_a = project_repo.add(
+            Project(id=None, name="Design Change Contract Project A", spec_format="MF2020")
+        )
+        project_b = project_repo.add(
+            Project(id=None, name="Design Change Contract Project B", spec_format="MF2020")
+        )
+        rfi_a = rfi_repo.add(
+            RFI(
+                id=None,
+                project_id=project_a.id,
+                number="214",
+                display_number="RFI-214",
+                subject="Contract test RFI for ASI",
+                ball_in_court=BallInCourt("assignee", None),
+                status="OPEN",
+            )
+        )
+        rfi_b = rfi_repo.add(
+            RFI(
+                id=None,
+                project_id=project_b.id,
+                number="1",
+                display_number="RFI-B1",
+                subject="Contract test RFI B",
+                ball_in_court=BallInCourt("assignee", None),
+                status="OPEN",
+            )
+        )
+        dc_a = design_change_repo.add(
+            DesignChange(
+                id=None,
+                project_id=project_a.id,
+                number="1",
+                display_number="ASI-1",
+                type="ASI",
+                status="DRAFT",
+                change_reason="Contract test ASI",
+                discipline_code="E",
+                source_rfi_id=rfi_a.id,
+                ball_in_court=BallInCourt("architect", None),
+            )
+        )
+        dc_b = design_change_repo.add(
+            DesignChange(
+                id=None,
+                project_id=project_b.id,
+                number="2",
+                display_number="CCD-2",
+                type="CCD",
+                status="DRAFT",
+                change_reason="Contract test CCD",
+                discipline_code="E",
+                source_rfi_id=rfi_b.id,
+                ball_in_court=BallInCourt("architect", None),
+            )
+        )
+        subscription_a = subscription_repo.add(
+            WebhookSubscription(
+                id=None,
+                project_id=project_a.id,
+                resource_name="design_changes",
+                event_type="update",
+                target_url="http://127.0.0.1:9/unreachable",
+                secret="contract-test-secret",
+            )
+        )
+
+        def _credential(client_prefix, scope):
+            integration_user = integration_repo.add(
+                IntegrationUser(
+                    id=None,
+                    project_id=project_a.id,
+                    name=f"DC Contract {client_prefix}",
+                    permission_scope=scope,
+                )
+            )
+            client = client_repo.add(
+                OAuthClient(
+                    client_id=client_prefix,
+                    client_secret_hash=hasher.hash("contract-test-secret"),
+                    integration_user_id=integration_user.id,
+                )
+            )
+            token = token_repo.add(
+                OAuthToken(
+                    access_token=f"{client_prefix}-access",
+                    refresh_token=f"{client_prefix}-refresh",
+                    client_id=client.client_id,
+                    expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+                )
+            )
+            grade["tokens"].append(token)
+            grade["clients"].append(client)
+            grade["integration_users"].append(integration_user.id)
+            return token.access_token
+
+        token_a_full = _credential("dc-contract-full-a", PermissionScope.full())
+        token_a_partial = _credential("dc-contract-partial-a", PermissionScope.partial("rfis"))
+
+        integration_user_b = integration_repo.add(
+            IntegrationUser(
+                id=None,
+                project_id=project_b.id,
+                name="DC Contract Full B",
+                permission_scope=PermissionScope.full(),
+            )
+        )
+        client_b = client_repo.add(
+            OAuthClient(
+                client_id="dc-contract-full-b",
+                client_secret_hash=hasher.hash("contract-test-secret"),
+                integration_user_id=integration_user_b.id,
+            )
+        )
+        token_b = token_repo.add(
+            OAuthToken(
+                access_token="dc-contract-full-b-access",
+                refresh_token="dc-contract-full-b-refresh",
+                client_id=client_b.client_id,
+                expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            )
+        )
+        grade["tokens"].append(token_b)
+        grade["clients"].append(client_b)
+        grade["integration_users"].append(integration_user_b.id)
+
+        session.commit()
+
+        yield {
+            "project_a": project_a.id,
+            "project_b": project_b.id,
+            "rfi_a": rfi_a.id,
+            "rfi_b": rfi_b.id,
+            "design_change_a": dc_a.id,
+            "design_change_b": dc_b.id,
+            "subscription_a_id": subscription_a.id,
+            "token_a_full": token_a_full,
+            "token_a_partial": token_a_partial,
+            "token_b": token_b.access_token,
+        }
+    finally:
+        client_ids = [c.client_id for c in grade["clients"]]
+        session.execute(
+            RateLimitStateModel.__table__.delete().where(
+                RateLimitStateModel.client_id.in_(client_ids)
+            )
+        )
+        session.execute(
+            WebhookDeliveryModel.__table__.delete().where(
+                WebhookDeliveryModel.project_id.in_(
+                    [oa.id for oa in (project_a, project_b) if oa is not None]
+                )
+            )
+        )
+        for tok in grade["tokens"]:
+            session.execute(
+                OAuthTokenModel.__table__.delete().where(OAuthTokenModel.client_id == tok.client_id)
+            )
+        for client in grade["clients"]:
+            session.execute(
+                OAuthClientModel.__table__.delete().where(OAuthClientModel.client_id == client.client_id)
+            )
+        for iu_id in grade["integration_users"]:
+            session.execute(
+                IntegrationUserModel.__table__.delete().where(IntegrationUserModel.id == iu_id)
+            )
+        session.execute(
+            WebhookSubscriptionModel.__table__.delete().where(
+                WebhookSubscriptionModel.project_id == project_a.id
+            )
+        )
+        session.execute(
+            DesignChangeModel.__table__.delete().where(
+                DesignChangeModel.project_id.in_(
+                    [oa.id for oa in (project_a, project_b) if oa is not None]
+                )
+            )
+        )
+        session.execute(
+            RFIModel.__table__.delete().where(
+                RFIModel.project_id.in_([oa.id for oa in (project_a, project_b) if oa is not None])
+            )
+        )
+        for oa in (project_a, project_b):
+            if oa is not None:
+                session.execute(
+                    ProjectModel.__table__.delete().where(ProjectModel.id == oa.id)
+                )
         session.commit()
         session.close()

@@ -191,14 +191,15 @@ export default function DesignChangeDetailPage({
                   <p className="text-sm text-muted-foreground">No drawing revisions affected.</p>
                 )}
                 {drawingVersions.map((v) => (
-                  <div
+                  <Link
                     key={v.id}
-                    className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
+                    href={`/projects/${projectId}/drawings/${v.drawing_id}`}
+                    className="flex items-center justify-between rounded-md border px-3 py-2 text-sm hover:bg-muted"
                   >
                     <span className="font-medium">{v.revision_label}</span>
                     <span className="text-muted-foreground">{v.issuance_date}</span>
                     <span className="text-muted-foreground">{v.status}</span>
-                  </div>
+                  </Link>
                 ))}
               </CardContent>
             </Card>
@@ -245,7 +246,18 @@ export default function DesignChangeDetailPage({
                     {change.affected_drawing_version_ids.length === 0 && <span>—</span>}
                     {change.affected_drawing_version_ids.map((vId) => {
                       const version = drawingVersions.find((v) => v.id === vId);
-                      return <span key={vId}>{version ? `${version.revision_label}` : `#${vId}`}</span>;
+                      if (version) {
+                        return (
+                          <Link
+                            key={vId}
+                            href={`/projects/${projectId}/drawings/${version.drawing_id}`}
+                            className="text-blue-600 hover:underline dark:text-blue-400"
+                          >
+                            {version.revision_label}
+                          </Link>
+                        );
+                      }
+                      return <span key={vId}>{`#${vId}`}</span>;
                     })}
                   </div>
                 </div>

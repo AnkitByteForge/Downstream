@@ -58,6 +58,11 @@ def test_canonical_seed_design_change_and_e_drawing(db_session):
     assert rfis[0].display_number == "RFI-214"
     assert rfis[0].status == "CLOSED"
 
+    # ASI-07 is historical/scene-setting, linked to its originating RFI (the
+    # domain model's source_rfi_id relationship) rather than a separate
+    # trigger — RFI-214 stays the lone trigger chain (RES-4E).
+    assert design_change.source_rfi_id == rfis[0].id
+
     # The design change affects the switchgear spec section relevant to the
     # upsized RTU (240 A MCA) and at least one drawing version.
     assert design_change.affected_spec_section_ids

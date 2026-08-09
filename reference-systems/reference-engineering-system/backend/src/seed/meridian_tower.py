@@ -478,7 +478,12 @@ def seed(session: Session) -> dict:
                 "switchgear lineup revised to match."
             ),
             discipline_code="E",
-            source_rfi_id=None,
+            # ASI-07 is historical/scene-setting, but the domain model supports
+            # associating it with its originating RFI (RFI-214), and the RES-4E
+            # contract requires that link. It must NOT become a Scenario-B
+            # trigger — it remains a closed-loop annotation on the Scenario-A
+            # RFI, not a new trigger chain.
+            source_rfi_id=rfi.id,
             ball_in_court=BallInCourt("architect", rhea.id),
             affected_drawing_version_ids=[e_rev_1.id],
             affected_spec_section_ids=[switchgear_spec_section.id],
