@@ -1,6 +1,6 @@
 # Downstream — Implementation Status
 
-**Last updated:** 2026-08-07 (RES-3 + PRE-RES-4 stabilization)
+**Last updated:** 2026-08-09 (RES-4A/B verification checkpoint)
 **Purpose of this document:** a single reference for exactly what has been built so far, in what order, and why — so any future session (human or agent) can pick up work without re-deriving decisions already made. This file is a living status record, not a frozen design document; it does not belong in `/docs` and carries no architectural authority of its own. If it ever disagrees with `/docs`, `/docs` wins.
 
 ---
@@ -36,8 +36,13 @@ Every decision below traces back to the seven frozen documents in `/docs`, read 
 | `d2c58b3` | Made directly by the user — corrected the `reference-engineering-*` build paths in `docker-compose.yml` to `../reference-systems/...`, which is only correct under plain (no `--project-directory`) invocation. Reconciled in this session — see §10.7. |
 | `4cd2743` | Made directly by the user — added `reference-systems/reference-engineering-system/RES-1_USER_GUIDE.md`, a practical run/test guide (not a design document). |
 | `03e1d35` | **Reference Engineering System — RES-2.** See §11 below. |
-| `1880bf5` | Made directly by the user — added `docs/reference/The Enterprise Fidelity Review.md` and `docs/reference/Canonical_Demo_Dataset.md` (the latter authored by this assistant in an earlier turn, committed by the user alongside the former). |
-| *(this commit)* | **Reference Engineering System — RES-3.** See §12 below. |
+| `1880bf5` | Made directly by the user — added `docs/reference/The Enterprise Fidelity Review.md` and `docs/reference/Canonical_Demo_Dataset.md` (the reference authored by this assistant in an earlier turn, committed by the user alongside the former). |
+| `467077e` | **Reference Engineering System — RES-3.** See §12 below. |
+| `53a205b` | PRE-RES-4 stabilization — FLA fields on SubmittalRevision + project-isolation guards (§13), plus this document's §13 and `AGENTS.md`. |
+| `f0d83c1` | Added `docs/research/DSH_Atacadero_Reconnaissance.md` (read-only research; not implementation). |
+| `7a9d075` | **RES-4A** — DesignChange domain entity + closed lifecycle state machine (ADR-007) + unit tests. |
+| `d5b9611` | **RES-4B** — DesignChange migration, ORM, repository, application use cases (list/get/issue/acknowledge/void/supersede), REST API, thin webhook on `issue`, `IssueDrawingVersion` use case, deps wiring, unit/application tests. |
+| *(this commit / next)* | **RES-4A/B verification checkpoint** (see §14) + RES-4C/D (see §15). |
 
 ---
 
@@ -49,10 +54,10 @@ Every decision below traces back to the seven frozen documents in `/docs`, read 
 | `apps/*` (16 services) | **Scaffold only** — folder structure, placeholder README/Dockerfile/pyproject.toml. Zero business logic, zero APIs, zero database code. This is Downstream's own service mesh — untouched by RES-1. |
 | `packages/*` (5 packages) | **Implemented** — real, tested Pydantic models and an ABC. This is Milestone 0 (Downstream's own shared contracts — not used by the Reference Engineering System, see §10.1). |
 | `infra/` | `docker-compose.yml` now wires the Reference Engineering System's three containers (db/backend/frontend); every other service entry is still scaffold-only, matching the blueprint. `mocks/Reference Engineering System/` was removed — superseded by `reference-systems/reference-engineering-system/` (see §10). `mocks/Reference Commercial System/` remains an empty placeholder. |
-| `reference-systems/reference-engineering-system/` | **RES-1 + RES-2 + RES-3 implemented** — FastAPI backend (Clean Architecture) + Next.js frontend, both real, both tested, both containerized and verified end to end. RES-3 adds Submittals (parent/child revisioning, ADR-004), a configuration-driven procurement-release gate (ADR-003), Submittal Packages (ADR-005, unused by seed data), Vendors, minimal Commitments, the spec-driven Submittal Register, and the Submittal Register/Detail + Specification Browser frontend pages. See §10 (RES-1), §11 (RES-2), §12 (RES-3). |
-| Tests | 201 `packages/*` unit tests (unchanged) + 61 Reference Engineering System backend tests (41 from RES-1/RES-2 + 20 new RES-3 tests across unit, application-with-fakes, integration, and contract tiers), all passing, twice in a row from a clean schema. Frontend: build + typecheck + lint clean; no automated frontend tests yet (Playwright suite is RES-5 scope). |
+| `reference-systems/reference-engineering-system/` | **RES-1 + RES-2 + RES-3 + RES-4A/B implemented** — FastAPI backend (Clean Architecture) + Next.js frontend, both real, both tested, both containerized and verified end to end. RES-3 adds Submittals (parent/child revisioning, ADR-004), a configuration-driven procurement-release gate (ADR-003), Submittal Packages (ADR-005, unused by seed data), Vendors, minimal Commitments, the spec-driven Submittal Register, and the Submittal Register/Detail + Specification Browser frontend pages. RES-4A/B adds the Design Change (ASI/CCD/Bulletin) entity, lifecycle, migrations, repository, use cases, REST API and the `IssueDrawingVersion` use case (§14). See §10 (RES-1), §11 (RES-2), §12 (RES-3), §14 (RES-4A/B). |
+| Tests | 201 `packages/*` unit tests (unchanged) + **111 Reference Engineering System backend tests** (all tiers) passing against a freshly migrated schema, plus a live API smoke test of the design-changes lifecycle. Frontend: build + typecheck + lint clean; no automated frontend tests yet (Playwright suite is RES-5 scope). |
 | Downstream Milestone (per blueprint §9) | Milestone 0 complete. Milestones 1–5 not started — unaffected by this phase. |
-| Reference Engineering System Milestone (per RES-3 Plan v2 §3) | **RES-1, RES-2, and RES-3 complete.** RES-4 (Design Change family, Field Issues) and RES-5 (ScheduleActivity, ModelObject, ClashItem, Transmittal, cross-entity relationship UI, Playwright) not started. |
+| Reference Engineering System Milestone (per RES-3 Plan v2 §3) | **RES-1, RES-2, RES-3 complete.** **RES-4A/B (Design Change family) implemented and verified** — see §14. RES-4C/D (frontend + canonical DesignChange/DWG seed) in progress. RES-4E/F/G (as later defined by repo plans), Field Issues, and RES-5 not started. |
 
 ---
 
@@ -628,4 +633,85 @@ the two changed TS/JSX files pass ESLint.
   admin API, scenario B half-producible on the commercial side, the
   `docker-compose.yml` `apps/*` path issue) are unchanged — out of scope for
   this stabilization.
+
+---
+
+## 14. Phase 6 — Reference Engineering System: RES-4A/B (Design Change family)
+
+### 14.1 Scope and authority
+
+RES-4 brings the **Design Change** family to the Reference Engineering
+System — the first milestone that is not purely read/seed. Per ADR-007:
+
+- One entity, `DesignChange`, with a **closed type enum**
+  (`ASI`, `CCD`, `BULLETIN`) — the single engineering-authorization entity
+  for the three in-scope instrument labels (RES's scope deliberately excludes
+  the commercial ChangeOrder/PCO/COR chain, which belongs to the future
+  Reference Commercial System).
+- One lifecycle: `DRAFT -> ISSUED -> ACKNOWLEDGED`, with `SUPERSEDED` and
+  `VOID` as terminal `SUPERSEDED`/`VOID` states (ADR-007).
+- **No direct DesignChange–Submittal relationship** (ADR-007): a design change
+  affects drawings/specs via `affected_drawing_version_ids` /
+  `affected_spec_section_ids`, mirroring how a change becomes effective in the
+  drawings.
+- The issue step (`DRAFT → ISSUED`) emits the **thin webhook** for
+  `resource_name="design_changes"`; acknowledge/void/supersede emit nothing
+  (RES-4 approved decision).
+
+### 2026-08-09 — RES-4A/B implementation (commits `7a9d075`, `d5b9611`)
+
+**RES-4A — domain model:**
+- `domain/entities/design_change.py` — dataclass + closed `DESIGN_CHANGE_TYPES`
+  / `DESIGN_CHANGE_STATUSES`; `entity_validation` of type/status in
+  `__post_init__`.
+- `domain/state_machines/design_change_transitions.py` — pure
+  `issue` / `acknowledge` / `supersede` / `void` transitions (nullable clocks).
+- `domain/repositories/design_change_repository.py` and
+  `tests/unit/domain/test_design_change_transitions.py` (state machine only,
+  ADR-007's "no ORM/migration/API changes with RES-4A" boundary).
+
+**RES-4B — the surface:**
+- Migration `0012_design_changes.py` — `design_changes` + three join tables
+  (`design_change_drawing_versions`, `design_change_spec_sections`,
+  `design_change_locations`); `superseded_by_id` self-FK.
+- ORM `orm_models/design_change.py`, repository
+  `SqlAlchemyDesignChangeRepository` (with `_replace_refs` for the joins).
+- Use cases (`application/use_cases/design_change_use_cases.py`): list/get
+  (project-scoped), `issue` (with thin webhook via `WebhookDispatcherPort`),
+  `acknowledge`, `void`, `supersede`.
+- **`IssueDrawingVersion`** (`application/use_cases/drawing_use_cases.py`) —
+  closes the RES-3 drawing-issuance gap: applies the legal
+  DrawingVersion issuance transition, stamps the issuance date, supersedes the
+  prior current version of the same sheet, repoints the Drawing at the newly
+  issued version, and emits the thin `documents/update` webhook
+  (resource_id = the issued version).
+- API layer: `api/schemas/design_change.py` (`DesignChangeOut`),
+  `api/v1/design_changes.py` (GET list/get, PATCH issue/acknowledge/void —
+  with `ctx.require_project` / `can_see` / `require_scope` guards and
+  correct 404 vs 403 semantics), `api/deps.py` wiring, `api/v1/router.py`.
+- Architectural tests: unit tests for the new use cases
+  (`tests/unit/application/test_design_change_use_cases.py`,
+  `test_drawing_issue_use_cases.py`) plus fakes in
+  `tests/unit/application/fakes.py`.
+
+### Verification checkpoint (this session, 2026-08-09)
+
+- **Test suite green**: 111 passed (was 82 at RES-3) — unit + architecture +
+  integration + contract, run twice in a row against a freshly migrated
+  Postgres schema.
+- **Live smoke test** (backend on :8000, seeded Meridian Tower project):
+  - `GET /rest/v1.0/projects/{id}/design_changes` → `200`, scoped, `X-Total`
+    correct.
+  - `GET .../design_changes/{id}` → returns `DesignChangeOut` with all
+    contract fields (type/ball_in_court/status, etc.).
+  - `PATCH .../design_changes/{id}/issue` → `ISSUED` with `issued_at`
+    populated (the webhook-worthy step).
+  - `PATCH .../design_changes/{id}/acknowledge` → `ACKNOWLEDGED` with
+    `acknowledged_at`.
+  - Smoke-test row cleaned up; DB left at canonical seed state.
+
+### Link to RES-4C/D
+
+RES-4C/D — the frontend Design Changes register + detail pages and the
+canonical DesignChange/DWG-E-1.1 seed — now proceed under §15 below.
 
