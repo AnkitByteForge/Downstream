@@ -1,6 +1,6 @@
 # Downstream — Implementation Status
 
-**Last updated:** 2026-08-09 (RES-4C/D checkpoint)
+**Last updated:** 2026-08-10 (RES-4G final verification checkpoint)
 **Purpose of this document:** a single reference for exactly what has been built so far, in what order, and why — so any future session (human or agent) can pick up work without re-deriving decisions already made. This file is a living status record, not a frozen design document; it does not belong in `/docs` and carries no architectural authority of its own. If it ever disagrees with `/docs`, `/docs` wins.
 
 ---
@@ -42,7 +42,10 @@ Every decision below traces back to the seven frozen documents in `/docs`, read 
 | `f0d83c1` | Added `docs/research/DSH_Atacadero_Reconnaissance.md` (read-only research; not implementation). |
 | `7a9d075` | **RES-4A** — DesignChange domain entity + closed lifecycle state machine (ADR-007) + unit tests. |
 | `d5b9611` | **RES-4B** — DesignChange migration, ORM, repository, application use cases (list/get/issue/acknowledge/void/supersede), REST API, thin webhook on `issue`, `IssueDrawingVersion` use case, deps wiring, unit/application tests. |
-| *(this commit / next)* | **RES-4A/B verification checkpoint** (see §14) + RES-4C/D (see §15). |
+| `0aa6318` | **RES-4A/B verification checkpoint** (see §14). |
+| `3bc9d27` | **RES-4C/D** — Design Changes register + detail frontend pages, `DesignChangeStatusBadge`, api client, canonical ASI-07 / DWG-E-1.1 seed + seed assertion test (see §15). |
+| `fa48f44` | **RES-4E** — design-changes API contract suite (`tests/contract/conftest.py`, `test_design_changes_api.py`) + the canonical ASI-07↔RFI-214 source link in the seed (see §16). |
+| *(this session — RES-4G, uncommitted)* | **RES-4G final verification + checkpoint** — full re-verification from a fresh schema at 127 tests + live API smoke, docs updated (see §16). |
 
 ---
 
@@ -54,10 +57,10 @@ Every decision below traces back to the seven frozen documents in `/docs`, read 
 | `apps/*` (16 services) | **Scaffold only** — folder structure, placeholder README/Dockerfile/pyproject.toml. Zero business logic, zero APIs, zero database code. This is Downstream's own service mesh — untouched by RES-1. |
 | `packages/*` (5 packages) | **Implemented** — real, tested Pydantic models and an ABC. This is Milestone 0 (Downstream's own shared contracts — not used by the Reference Engineering System, see §10.1). |
 | `infra/` | `docker-compose.yml` now wires the Reference Engineering System's three containers (db/backend/frontend); every other service entry is still scaffold-only, matching the blueprint. `mocks/Reference Engineering System/` was removed — superseded by `reference-systems/reference-engineering-system/` (see §10). `mocks/Reference Commercial System/` remains an empty placeholder. |
-| `reference-systems/reference-engineering-system/` | **RES-1 + RES-2 + RES-3 + RES-4 implemented** — FastAPI backend (Clean Architecture) + Next.js frontend, both real, both tested, both containerized and verified end to end. RES-3 adds Submittals (parent/child revisioning, ADR-004), a configuration-driven procurement-release gate (ADR-003), Submittal Packages (ADR-005, unused by seed data), Vendors, minimal Commitments, the spec-driven Submittal Register, and the Submittal Register/Detail + Specification Browser frontend pages. RES-4A/B adds the Design Change (ASI/CCD/Bulletin) entity, lifecycle, migrations, repository, use cases, REST API and the `IssueDrawingVersion` use case (§14). RES-4C/D adds the Design Changes Register/Detail frontend pages and the canonical ASI-07/DWG-E-1.1 seed (§15). See §10 (RES-1), §11 (RES-2), §12 (RES-3), §14 (RES-4A/B), §15 (RES-4C/D). |
-| Tests | 201 `packages/*` unit tests (unchanged) + **112 Reference Engineering System backend tests** (all tiers) passing against a freshly migrated schema — including the seed assertion test (`tests/integration/test_seed_data.py`). Frontend: build + typecheck + lint clean; live dev-server smoke of the new Design Changes register/detail pages returned 200; no automated frontend tests yet (Playwright suite is RES-5 scope). |
+| `reference-systems/reference-engineering-system/` | **RES-1 + RES-2 + RES-3 + RES-4 implemented** — FastAPI backend (Clean Architecture) + Next.js frontend, both real, both tested, both containerized and verified end to end. RES-3 adds Submittals (parent/child revisioning, ADR-004), a configuration-driven procurement-release gate (ADR-003), Submittal Packages (ADR-005, unused by seed data), Vendors, minimal Commitments, the spec-driven Submittal Register, and the Submittal Register/Detail + Specification Browser frontend pages. RES-4 adds the Design Change (ASI/CCD/Bulletin) family per ADR-007 — domain/lifecycle (RES-4A), backend surface (RES-4B), frontend register/detail (RES-4C), canonical ASI-07/DWG-E-1.1 seed (RES-4D), API contract suite + RFI-source link (RES-4E), project-isolation/scope-containment contracts (RES-4F), and this session's final verification checkpoint (RES-4G) — see §14, §15, §16. |
+| Tests | 201 `packages/*` unit tests (unchanged) + **127 Reference Engineering System backend tests** (all tiers) passing against a freshly migrated schema — including the seed assertion test and the design-changes/project-isolation contract suites. Frontend: build + typecheck + lint clean; live dev-server smoke of the Design Changes register/detail pages returned 200; no automated frontend tests yet (Playwright suite is RES-5 scope). |
 | Downstream Milestone (per blueprint §9) | Milestone 0 complete. Milestones 1–5 not started — unaffected by this phase. |
-| Reference Engineering System Milestone (per RES-3 Plan v2 §3) | **RES-1, RES-2, RES-3 complete.** **RES-4A/B (Design Change family) implemented and verified** — see §14. **RES-4C/D (frontend + canonical DesignChange/DWG seed) implemented and verified** — see §15. RES-4E/F/G (as later defined by repo plans), Field Issues, and RES-5 not started. |
+| Reference Engineering System Milestone (per RES-3 Plan v2 §3) | **RES-1, RES-2, RES-3 complete.** **RES-4 complete — RES-4A through RES-4G, each verified in turn** — see §14 (A/B), §15 (C/D), §16 (E/F/G). Field Issues and RES-5 not started. |
 
 ---
 
@@ -774,7 +777,68 @@ canonical DesignChange/DWG-E-1.1 seed — now proceed under §15 below.
 
 ### 15.4 Next
 
-RES-4E/F/G (as later defined by repo plans), Field Issues, and RES-5 remain
-not started. Begin the next milestone only when §15's verification passes, the
-status is updated, and the git checkpoint is committed.
+Begin the next milestone only when §15's verification passes, the status is
+updated, and the git checkpoint is committed. RES-4E/F/G are defined under §16
+below.
+
+---
+
+## 16. Phase 6 — Reference Engineering System: RES-4E/F/G
+
+### 16.1 RES-4E — API contract suite + canonical RFI-source link (commit `fa48f44`)
+
+- `tests/contract/conftest.py` — contract fixtures that stand up the real API
+  surface (asgi transport, auth, scope) against a DB session.
+- `tests/contract/test_design_changes_api.py` — end-to-end contract tests:
+  auth required, seeded rows with `X-Total`, pagination, contract-field shape,
+  scoped-integration 404 semantics, cross-project isolation, webhook dispatch
+  on `issue` including a recorded `webhook_deliveries` row and the 409
+  already-issued case, per-client rate limiting.
+- The canonical seed now carries the **ASI-07↔RFI-214 source link**
+  (`source_rfi_id`), per the RES-4E contract: ASI-07 stays a closed-loop
+  annotation on the Scenario-A RFI and must *not* spin up a new trigger chain.
+  Asserted in `tests/integration/test_seed_data.py`.
+
+### 16.2 RES-4F — project isolation + scope containment (contracts)
+
+- `tests/contract/test_project_isolation.py` — human-vs-integration and
+  cross-project 404 semantics for projects, RFIs, activity, and mutations
+  (`get_project_cross_project_is_404`, `integration_cross_project_get_rfi_is_404`,
+  `cross_project_mutation_respond_is_404`, under-scoped integration cannot
+  retrieve, same-project full-scope success).
+- Confirms RES-3's project-isolation guards hold for the Design Change paths
+  too (`test_design_changes_*` cross-project / scope / mismatch 404s).
+
+### 16.3 RES-4G — final verification + checkpoint (this session, 2026-08-10)
+
+Full re-verification from a **completely fresh schema**, not the persistent
+test DB:
+
+- **Fresh DB**: `reference_engineering` dropped and recreated on the
+  `res-test-db` container; all 12 alembic migrations ran clean
+  (`alembic upgrade head`), then `meridian_tower.py` seeded on the empty schema.
+- **Full backend suite**: **127 passed** against the fresh schema (was 112 at
+  §15) — unit + architecture + integration/contract, including the seed
+  assertion test and the design-changes contract/project-isolation suites.
+  `tests/architecture/test_layer_boundaries.py` passes.
+- **Frontend**: `npm run build` (incl. real TypeScript) + targeted ESLint on
+  design-changes routes/components/api-client — clean.
+- **Live API smoke** (backend on :8000, seeded Meridian Tower):
+  - login → `GET .../design_changes` (listed), `GET .../design_changes/1`
+    detail = ASI-07 ISSUED with all contract fields.
+  - `PATCH .../design_changes/{id}/issue` → ISSUED with `issued_at`;
+    `PATCH .../documents/versions/{id}/issue` → ISSUED; each recorded a thin
+    `webhook_deliveries` row (FAILED = no receiver on :9999, as expected).
+  - Smoke rows + delivery rows cleaned up; DB restored to canonical seed.
+- **Data facts re-verified on the fresh DB**:
+  - RFI-214 (Scenario A) CLOSED, sole trigger chain; spawned ASI-07.
+  - SUB-118 Rev 0 (CA-RTU-40, MCA 180 A, FLA 150 A) → Rev 1 (CA-RTU-55,
+    MCA 240 A, FLA 200 A) — Scenario B equipment data preserved verbatim.
+  - ASI-07 ISSUED, `source_rfi_id = RFI-214`, affects DWG-E-1.1 Rev 1 + switchgear
+    spec section + electrical-room location; **not** a Scenario-B trigger.
+  - DWG-E-1.1: Rev 0 `SUPERSEDED`, superseded-by Rev 1 (`ISSUED`, current).
+  - Thin webhook subscriptions intact (`rfis`, `submittals`, `design_changes` →
+    the :9999 sink).
+- **Repo hygiene**: working tree clean, `git diff --check` clean, no commit on
+  this session's doc updates (per standing instruction).
 

@@ -27,10 +27,13 @@ RES-1 — VERIFIED
 RES-2 — VERIFIED
 RES-3 — VERIFIED
 PRE-RES-4 stabilization — VERIFIED
-RES-4A — VERIFIED
-RES-4B — VERIFIED
+RES-4A — VERIFIED (DesignChange domain entity + closed lifecycle state machine, ADR-007)
+RES-4B — VERIFIED (migration 0012, ORM, repository, use cases, REST API, thin webhook on `issue`, `IssueDrawingVersion`)
 RES-4C — VERIFIED (frontend register + detail pages, seed assertion test)
 RES-4D — VERIFIED (canonical ASI-07 / DWG-E-1.1 seed, webhook subscription)
+RES-4E — VERIFIED (design-changes API contract suite + canonical ASI-07↔RFI-214 source link)
+RES-4F — VERIFIED (project isolation + scope-containment contract suite)
+RES-4G — VERIFIED (final verification checkpoint from a fresh schema, 127 tests — see below)
 
 ## Current checkpoint
 
@@ -50,17 +53,32 @@ RES-4C/D completed (2026-08-09) in the same work session:
   The full suite now runs 112 tests including the new seed assertion test
   `tests/integration/test_seed_data.py`.
 
-The seed assertion test clears all tables inside its own rolled-back
-transaction (so it passes whether or not `run_seed` has been run) and
-asserts RFI-214 stays the sole Scenario-A trigger, the ASI does not create a
-new RFI, DWG-E-1.1 supersession is exact, and SUB-118's MCA/FLA table is
-preserved.
+RES-4E/F completed (2026-08-10, commits `fa48f44`):
+- RES-4E: `tests/contract/conftest.py` + `test_design_changes_api.py` — auth,
+  `X-Total`, pagination, contract-field shape, scoped-integration 404s,
+  cross-project isolation, webhook dispatch on `issue` (+ recorded
+  `webhook_deliveries` row), 409 already-issued, per-client rate limiting; the
+  canonical seed carries the ASI-07↔RFI-214 `source_rfi_id` link, asserted to
+  stay the lone Scenario-A trigger chain.
+- RES-4F: `tests/contract/test_project_isolation.py` — human/integration and
+  cross-project 404 semantics for projects, RFIs, activity, mutations across
+  RES-3 + RES-4 surfaces.
 
-DO NOT begin RES-4E/F/G until:
-1. full verification passes (of whatever E/F/G turn out to be per the
-   repo's later plans)
-2. implementation status is updated
-3. git checkpoint is committed
+RES-4G verified (2026-08-10, uncommitted this session):
+- **Fresh schema**: `reference_engineering` recreated on `res-test-db`; 12
+  alembic migrations → `head`, then `run_seed` on the empty schema.
+- **127 passed** (all tiers, incl. architecture + seed assertion + contract
+  suites). Frontend build + ESLint clean.
+- **Live smoke**: login, design-changes list/detail (ASI-07), `issue` on a
+  DesignChange and on a DrawingVersion (each thin webhook delivery recorded),
+  state restored to canonical seed.
+- **Data facts**: RFI-214 CLOSED sole Scenario-A trigger; SUB-118 Rev 0→Rev 1
+  MCA 180→240 A / FLA 150→200 A preserved; ASI-07 ISSUED linked to RFI-214,
+  not a Scenario-B trigger; DWG-E-1.1 Rev 0 superseded by Rev 1; thin webhook
+  configs + canonical `webhook_deliveries` behavior intact.
+- Working tree clean; `git diff --check` clean; no commit staged.
+
+RES-5 and Field Issues remain not started.
 
 ## Canonical scenarios
 
