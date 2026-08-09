@@ -1,6 +1,6 @@
 # Downstream — Implementation Status
 
-**Last updated:** 2026-08-09 (RES-4A/B verification checkpoint)
+**Last updated:** 2026-08-09 (RES-4C/D checkpoint)
 **Purpose of this document:** a single reference for exactly what has been built so far, in what order, and why — so any future session (human or agent) can pick up work without re-deriving decisions already made. This file is a living status record, not a frozen design document; it does not belong in `/docs` and carries no architectural authority of its own. If it ever disagrees with `/docs`, `/docs` wins.
 
 ---
@@ -54,10 +54,10 @@ Every decision below traces back to the seven frozen documents in `/docs`, read 
 | `apps/*` (16 services) | **Scaffold only** — folder structure, placeholder README/Dockerfile/pyproject.toml. Zero business logic, zero APIs, zero database code. This is Downstream's own service mesh — untouched by RES-1. |
 | `packages/*` (5 packages) | **Implemented** — real, tested Pydantic models and an ABC. This is Milestone 0 (Downstream's own shared contracts — not used by the Reference Engineering System, see §10.1). |
 | `infra/` | `docker-compose.yml` now wires the Reference Engineering System's three containers (db/backend/frontend); every other service entry is still scaffold-only, matching the blueprint. `mocks/Reference Engineering System/` was removed — superseded by `reference-systems/reference-engineering-system/` (see §10). `mocks/Reference Commercial System/` remains an empty placeholder. |
-| `reference-systems/reference-engineering-system/` | **RES-1 + RES-2 + RES-3 + RES-4A/B implemented** — FastAPI backend (Clean Architecture) + Next.js frontend, both real, both tested, both containerized and verified end to end. RES-3 adds Submittals (parent/child revisioning, ADR-004), a configuration-driven procurement-release gate (ADR-003), Submittal Packages (ADR-005, unused by seed data), Vendors, minimal Commitments, the spec-driven Submittal Register, and the Submittal Register/Detail + Specification Browser frontend pages. RES-4A/B adds the Design Change (ASI/CCD/Bulletin) entity, lifecycle, migrations, repository, use cases, REST API and the `IssueDrawingVersion` use case (§14). See §10 (RES-1), §11 (RES-2), §12 (RES-3), §14 (RES-4A/B). |
-| Tests | 201 `packages/*` unit tests (unchanged) + **111 Reference Engineering System backend tests** (all tiers) passing against a freshly migrated schema, plus a live API smoke test of the design-changes lifecycle. Frontend: build + typecheck + lint clean; no automated frontend tests yet (Playwright suite is RES-5 scope). |
+| `reference-systems/reference-engineering-system/` | **RES-1 + RES-2 + RES-3 + RES-4 implemented** — FastAPI backend (Clean Architecture) + Next.js frontend, both real, both tested, both containerized and verified end to end. RES-3 adds Submittals (parent/child revisioning, ADR-004), a configuration-driven procurement-release gate (ADR-003), Submittal Packages (ADR-005, unused by seed data), Vendors, minimal Commitments, the spec-driven Submittal Register, and the Submittal Register/Detail + Specification Browser frontend pages. RES-4A/B adds the Design Change (ASI/CCD/Bulletin) entity, lifecycle, migrations, repository, use cases, REST API and the `IssueDrawingVersion` use case (§14). RES-4C/D adds the Design Changes Register/Detail frontend pages and the canonical ASI-07/DWG-E-1.1 seed (§15). See §10 (RES-1), §11 (RES-2), §12 (RES-3), §14 (RES-4A/B), §15 (RES-4C/D). |
+| Tests | 201 `packages/*` unit tests (unchanged) + **112 Reference Engineering System backend tests** (all tiers) passing against a freshly migrated schema — including the seed assertion test (`tests/integration/test_seed_data.py`). Frontend: build + typecheck + lint clean; live dev-server smoke of the new Design Changes register/detail pages returned 200; no automated frontend tests yet (Playwright suite is RES-5 scope). |
 | Downstream Milestone (per blueprint §9) | Milestone 0 complete. Milestones 1–5 not started — unaffected by this phase. |
-| Reference Engineering System Milestone (per RES-3 Plan v2 §3) | **RES-1, RES-2, RES-3 complete.** **RES-4A/B (Design Change family) implemented and verified** — see §14. RES-4C/D (frontend + canonical DesignChange/DWG seed) in progress. RES-4E/F/G (as later defined by repo plans), Field Issues, and RES-5 not started. |
+| Reference Engineering System Milestone (per RES-3 Plan v2 §3) | **RES-1, RES-2, RES-3 complete.** **RES-4A/B (Design Change family) implemented and verified** — see §14. **RES-4C/D (frontend + canonical DesignChange/DWG seed) implemented and verified** — see §15. RES-4E/F/G (as later defined by repo plans), Field Issues, and RES-5 not started. |
 
 ---
 
@@ -714,4 +714,67 @@ System — the first milestone that is not purely read/seed. Per ADR-007:
 
 RES-4C/D — the frontend Design Changes register + detail pages and the
 canonical DesignChange/DWG-E-1.1 seed — now proceed under §15 below.
+
+---
+
+## 15. Phase 6 — Reference Engineering System: RES-4C/D
+
+### 15.1 Scope
+
+- **RES-4C (frontend):** the Design Changes Register and Design Change Detail
+  pages behind the project shell, plus a register nav entry, a
+  `DesignChangeStatusBadge`, and the `designChangesApi`/`DesignChangeOut`
+  client wiring. The register is a server page that proxies to the backend;
+  the detail page is a client component that loads the change via
+  `GET .../design_changes/{id}` and renders its status, ball-in-court,
+  affected drawings/specs/locations, and the issue→acknowledge timeline —
+  wired into `AcknowledgeDesignChange` internally, with no client-side state
+  forging.
+- **RES-4D (canonical seed):** extends `meridian_tower.py` with the Design
+  Change that the *Canonical Demo Dataset* (§8) prescribes and the project
+  plan needs, in particular:
+  - `DWG-E-1.1` (Electrical Plan — Level 1) as a `DRAWING`, starting at
+    Rev 0 and being superseded to Rev 1 in the seed.
+  - An **ASI-07** `DesignChange` (`type=ASI`) driving that supersession,
+    issued via the ASI-07 issue use case, targeted at the DWG-E-1.1 Rev 1
+    version and Spec 26 24 13 (no direct DesignChange→Submittal link, per
+    ADR-007), plus `affected_drawing_version_ids` / `affected_spec_section_ids`
+    / `location_ids` fill-in.
+  - The default webhook subscription now also targets `design_changes` (in
+    addition to `rfis` / `documents`), so issue/acknowledge of the seeded ASI
+    dispatches the thin payload to the seeded webhook.
+  - `design_change_repo` + imports added to the seed.
+
+### 15.2 Verification
+
+- `tests/integration/test_seed_data.py` — a new **seed assertion test**: seeds
+  the canonical dataset inside a rolled-back transaction and asserts the
+  resulting shape (supersession + ASI present, drawing superseded pointer,
+  spec/locations, and RFI-214 stays the only Scenario-A trigger). This proves
+  the canonical seed is idempotent and future-proof — it runs whether or not
+  `run_seed` has been executed against the DB.
+- Full backend suite: **112 passed** (was 111 at §14) including the new seed
+  test, run against the migrated schema.
+- Frontend: `npm run build` (incl. real TypeScript check) + targeted ESLint
+  clean; live dev-server smoke of `/projects/1/design-changes` and
+  `/.../design-changes/1` returned 200 with the seeded ASI-07 data.
+
+### 15.3 Files
+
+- `backend/src/seed/meridian_tower.py` — DWG-E-1.1 + ASI-07 seed, webhook
+  subscription.
+- `backend/tests/integration/test_seed_data.py` — seed assertion test.
+- `frontend/src/app/projects/[projectId]/design-changes/page.tsx` — register.
+- `frontend/src/app/projects/[projectId]/design-changes/[changeId]/page.tsx`
+  — detail.
+- `frontend/src/components/status-badge.tsx` — `DesignChangeStatusBadge`.
+- `frontend/src/components/app-shell.tsx` — nav entry.
+- `frontend/src/lib/api-client/types.ts`, `index.ts` — `DesignChangeOut` +
+  `designChangesApi`.
+
+### 15.4 Next
+
+RES-4E/F/G (as later defined by repo plans), Field Issues, and RES-5 remain
+not started. Begin the next milestone only when §15's verification passes, the
+status is updated, and the git checkpoint is committed.
 

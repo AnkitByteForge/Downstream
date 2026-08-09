@@ -7,6 +7,7 @@ import {
   FolderKanban,
   FileQuestion,
   FileStack,
+  FileDiff,
   Activity,
   ClipboardCheck,
   BookOpen,
@@ -103,6 +104,12 @@ export function AppShell({ session, projectId, children }: AppShellProps) {
                 icon={ClipboardCheck}
                 label="Submittals"
                 active={pathname.startsWith(`/projects/${projectId}/submittals`)}
+              />
+              <NavLink
+                href={`/projects/${projectId}/design-changes`}
+                icon={FileDiff}
+                label="Design Changes"
+                active={pathname.startsWith(`/projects/${projectId}/design-changes`)}
               />
               <NavLink
                 href={`/projects/${projectId}/specifications`}

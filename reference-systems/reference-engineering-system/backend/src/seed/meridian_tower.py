@@ -6,6 +6,7 @@ from datetime import date, datetime, timezone
 from sqlalchemy.orm import Session
 
 from domain.entities import (
+    DesignChange,
     Discipline,
     Drawing,
     DrawingVersion,
@@ -24,9 +25,17 @@ from domain.entities import (
     Vendor,
     WebhookSubscription,
 )
-from domain.state_machines import drawing_version_transitions, rfi_transitions, submittal_transitions
+from domain.state_machines import (
+    design_change_transitions,
+    drawing_version_transitions,
+    rfi_transitions,
+    submittal_transitions,
+)
 from domain.value_objects import BallInCourt, PermissionScope, RevisionCloud
 from infrastructure.auth.password_hashing import Pbkdf2PasswordHasher
+from infrastructure.persistence.repositories.sqlalchemy_design_change_repository import (
+    SqlAlchemyDesignChangeRepository,
+)
 from infrastructure.persistence.repositories.sqlalchemy_drawing_repository import (
     SqlAlchemyDrawingRepository,
     SqlAlchemyDrawingVersionRepository,
@@ -99,6 +108,7 @@ def seed(session: Session) -> dict:
     requirement_repo = SqlAlchemySubmittalRequirementRepository(session)
     submittal_repo = SqlAlchemySubmittalRepository(session)
     revision_repo = SqlAlchemySubmittalRevisionRepository(session)
+    design_change_repo = SqlAlchemyDesignChangeRepository(session)
 
     discipline_repo.add(Discipline(code="M", name="Mechanical"))
     discipline_repo.add(Discipline(code="E", name="Electrical"))
@@ -150,15 +160,8 @@ def seed(session: Session) -> dict:
     level_1 = location_repo.add(
         Location(id=None, project_id=project.id, parent_id=building.id, tier_level=2, name="Level 1", type="level")
     )
-    location_repo.add(
-        Location(
-            id=None,
-            project_id=project.id,
-            parent_id=level_1.id,
-            tier_level=3,
-            name="Level 1 Electrical Room",
-            type="zone",
-        )
+    electrical_room = location_repo.add(
+        Location(id=None, project_id=project.id, parent_id=level_1.id, tier_level=3, name="Level 1 Electrical Room", type="zone")
     )
     location_repo.add(
         Location(id=None, project_id=project.id, parent_id=building.id, tier_level=2, name="Roof", type="level")
@@ -415,6 +418,79 @@ def seed(session: Session) -> dict:
         )
     )
 
+    # --- Design Change (RES-4D): DWG-E-1.1 supersession driven by ASI-07 —
+    # per Canonical_Demo_Dataset.md §8 "Stage B2" (non-binding RES-4 sketch):
+    # an ASI citing SUB-118 Rev 1's load increase supersedes DWG-E-1.1 Rev 0 →
+    # Rev 1 on the electrical plan, closing the
+    # DesignChange → IssueDrawingVersion relationship (ADR-007).
+    e_drawing = drawing_repo.add(
+        Drawing(
+            id=None,
+            project_id=project.id,
+            sheet_number="E-1.1",
+            title="Electrical Plan - Level 1",
+            discipline_code="E",
+        )
+    )
+
+    e_rev_0 = version_repo.add(
+        DrawingVersion(
+            id=None,
+            drawing_id=e_drawing.id,
+            revision_label="Rev 0",
+            issuance_date=date(2026, 6, 15),
+            status="DRAFT",
+            discipline_code="E",
+            location_ids=[electrical_room.id],
+        )
+    )
+    e_rev_0 = version_repo.update(drawing_version_transitions.issue_version(e_rev_0))
+
+    e_rev_1 = version_repo.add(
+        DrawingVersion(
+            id=None,
+            drawing_id=e_drawing.id,
+            revision_label="Rev 1",
+            issuance_date=date(2026, 8, 5),
+            status="DRAFT",
+            discipline_code="E",
+            location_ids=[electrical_room.id],
+        )
+    )
+    e_rev_1 = version_repo.update(drawing_version_transitions.issue_version(e_rev_1))
+    e_rev_0 = version_repo.update(
+        drawing_version_transitions.supersede(e_rev_0, e_rev_1.id)
+    )
+    e_drawing.current_version_id = e_rev_1.id
+    drawing_repo.update(e_drawing)
+
+    asi_07 = design_change_repo.add(
+        DesignChange(
+            id=None,
+            project_id=project.id,
+            number="07",
+            display_number="ASI-07",
+            type="ASI",
+            status="DRAFT",
+            change_reason=(
+                "Rooftop unit upsized from CA-RTU-40 (180 A MCA) to CA-RTU-55 "
+                "(240 A MCA) per SUB-118 Rev 1; electrical plan Level 1 "
+                "switchgear lineup revised to match."
+            ),
+            discipline_code="E",
+            source_rfi_id=None,
+            ball_in_court=BallInCourt("architect", rhea.id),
+            affected_drawing_version_ids=[e_rev_1.id],
+            affected_spec_section_ids=[switchgear_spec_section.id],
+            location_ids=[electrical_room.id],
+        )
+    )
+    asi_07 = design_change_repo.update(
+        design_change_transitions.issue_design_change(
+            asi_07, datetime(2026, 8, 5, 14, 0, 0, tzinfo=timezone.utc)
+        )
+    )
+
     full_scope_integration = integration_repo.add(
         IntegrationUser(
             id=None, project_id=project.id, name="Downstream (full scope)", permission_scope=PermissionScope.full()
@@ -466,6 +542,16 @@ def seed(session: Session) -> dict:
             secret=DEFAULT_WEBHOOK_SECRET,
         )
     )
+    webhook_subscription_repo.add(
+        WebhookSubscription(
+            id=None,
+            project_id=project.id,
+            resource_name="design_changes",
+            event_type="update",
+            target_url=DEFAULT_WEBHOOK_TARGET_URL,
+            secret=DEFAULT_WEBHOOK_SECRET,
+        )
+    )
 
     return {
         "project_id": project.id,
@@ -476,5 +562,7 @@ def seed(session: Session) -> dict:
         "submittal_id": submittal.id,
         "submittal_rev0_id": rev_0.id,
         "submittal_rev1_id": rev_1.id,
+        "design_change_id": asi_07.id,
+        "design_change_drawing_id": e_drawing.id,
         "demo_password": DEMO_PASSWORD,
     }

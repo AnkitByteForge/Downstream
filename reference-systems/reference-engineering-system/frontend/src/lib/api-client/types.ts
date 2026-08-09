@@ -153,3 +153,27 @@ export interface SubmittalRequirementOut {
   submittal_type: string;
   category: string;
 }
+
+export type DesignChangeType = "ASI" | "CCD" | "BULLETIN";
+
+export type DesignChangeStatus = "DRAFT" | "ISSUED" | "ACKNOWLEDGED" | "SUPERSEDED" | "VOID";
+
+export interface DesignChangeOut {
+  id: number;
+  project_id: number;
+  number: string;
+  display_number: string;
+  type: DesignChangeType;
+  status: DesignChangeStatus;
+  change_reason: string | null;
+  discipline_code: string | null;
+  source_rfi_id: number | null;
+  ball_in_court: string;
+  affected_drawing_version_ids: number[];
+  affected_spec_section_ids: number[];
+  location_ids: number[];
+  superseded_by_id: number | null;
+  issued_at: string | null;
+  acknowledged_at: string | null;
+  voided_at: string | null;
+}

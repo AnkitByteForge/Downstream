@@ -1,6 +1,7 @@
 import { apiClient } from "./client";
 import type {
   ActivityEntryOut,
+  DesignChangeOut,
   DrawingOut,
   DrawingVersionOut,
   LocationOut,
@@ -69,6 +70,27 @@ export const documentsApi = {
   getVersion: (projectId: number, versionId: number) =>
     apiClient.get<DrawingVersionOut>(
       `/rest/v1.0/projects/${projectId}/documents/versions/${versionId}`
+    ),
+};
+
+export const designChangesApi = {
+  list: (projectId: number) =>
+    apiClient.get<DesignChangeOut[]>(`/rest/v1.0/projects/${projectId}/design_changes`),
+  get: (projectId: number, changeId: number) =>
+    apiClient.get<DesignChangeOut>(
+      `/rest/v1.0/projects/${projectId}/design_changes/${changeId}`
+    ),
+  issue: (projectId: number, changeId: number) =>
+    apiClient.patch<DesignChangeOut>(
+      `/rest/v1.0/projects/${projectId}/design_changes/${changeId}/issue`
+    ),
+  acknowledge: (projectId: number, changeId: number) =>
+    apiClient.patch<DesignChangeOut>(
+      `/rest/v1.0/projects/${projectId}/design_changes/${changeId}/acknowledge`
+    ),
+  voidChange: (projectId: number, changeId: number) =>
+    apiClient.patch<DesignChangeOut>(
+      `/rest/v1.0/projects/${projectId}/design_changes/${changeId}/void`
     ),
 };
 
