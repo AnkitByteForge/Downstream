@@ -145,6 +145,16 @@ E04_SHEET_LABEL = "E0.4 - Air Handler Replacement Schedule"
 TABLE_GRID_DIR = DSH_DERIVED_DIR / "table_grid"
 EQUIPMENT_ROWS_DIR = DSH_DERIVED_DIR / "equipment_rows"
 
+# --- Phase E.0: persisted structured_state (approved DIP -> Engineering
+# Evidence Promotion plan, storage architecture table) --- one JSON file
+# per (document_id, page_index, extractor_version, ocr_engine, render_scale)
+# — this five-part tuple is the full persistence identity per the approved
+# plan's E.0 requirement. Named "structured_state" (not the pre-existing,
+# unused EQUIPMENT_ROWS_DIR above) to match the approved plan's own storage
+# architecture section literally, rather than silently repurposing an
+# unrelated leftover constant.
+STRUCTURED_STATE_DIR = DSH_DERIVED_DIR / "structured_state"
+
 # Tesseract binary location. PATH is not assumed — see README's
 # "Tesseract setup" section for why. Overridable via DIP_TESSERACT_CMD.
 TESSERACT_CMD_ENV_VAR = "DIP_TESSERACT_CMD"
