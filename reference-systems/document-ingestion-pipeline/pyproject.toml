@@ -1,0 +1,34 @@
+[project]
+name = "dip"
+version = "0.1.0"
+description = "Document Ingestion Pipeline (DIP) — extraction/manifest/OCR/diff tooling for the DSH-Atascadero corpus. Not a Downstream service; not a connector. See docs/architecture/DSH_Ingestion_Pipeline_Architecture.md."
+requires-python = ">=3.11"
+dependencies = [
+    "pypdfium2>=5,<6",
+    "pillow>=12,<13",
+    "pydantic>=2,<3",
+]
+
+[project.optional-dependencies]
+ocr = [
+    "pytesseract>=0.3,<1",
+    "rapidocr-onnxruntime>=1,<2",
+]
+dev = [
+    "pytest>=8,<10",
+]
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-m 'not golden'"
+markers = [
+    "golden: exercises the real DSH-Atascadero PDF corpus (250MB+); excluded from the default run by addopts above, and self-skips if the corpus files aren't present even when explicitly requested with -m golden",
+]
