@@ -7,12 +7,16 @@ from application.ports import ClockPort, WebhookDispatcherPort
 from domain.entities import RFI, WebhookDelivery, WebhookSubscription
 from domain.entities.design_change import DesignChange
 from domain.entities.drawing import Drawing, DrawingVersion
+from domain.entities.model_object import ModelObject
+from domain.entities.schedule_activity import ScheduleActivity
 from domain.entities.submittal import Submittal, SubmittalReviewStatus, SubmittalRevision
 from domain.repositories import (
     DesignChangeRepository,
     DrawingRepository,
     DrawingVersionRepository,
+    ModelObjectRepository,
     RFIRepository,
+    ScheduleActivityRepository,
     WebhookDeliveryRepository,
     WebhookSubscriptionRepository,
 )
@@ -192,6 +196,42 @@ class InMemoryDesignChangeRepository(DesignChangeRepository):
     def update(self, design_change: DesignChange) -> DesignChange:
         self._rows[design_change.id] = design_change
         return design_change
+
+
+class InMemoryScheduleActivityRepository(ScheduleActivityRepository):
+    def __init__(self, seeded: list[ScheduleActivity] | None = None) -> None:
+        self._rows: dict[int, ScheduleActivity] = {a.id: a for a in (seeded or [])}
+        self._next_id = max(self._rows, default=0) + 1
+
+    def get(self, schedule_activity_id: int) -> ScheduleActivity | None:
+        return self._rows.get(schedule_activity_id)
+
+    def list_by_project(self, project_id: int) -> list[ScheduleActivity]:
+        return [a for a in self._rows.values() if a.project_id == project_id]
+
+    def add(self, schedule_activity: ScheduleActivity) -> ScheduleActivity:
+        schedule_activity = replace(schedule_activity, id=self._next_id)
+        self._rows[schedule_activity.id] = schedule_activity
+        self._next_id += 1
+        return schedule_activity
+
+
+class InMemoryModelObjectRepository(ModelObjectRepository):
+    def __init__(self, seeded: list[ModelObject] | None = None) -> None:
+        self._rows: dict[int, ModelObject] = {o.id: o for o in (seeded or [])}
+        self._next_id = max(self._rows, default=0) + 1
+
+    def get(self, model_object_id: int) -> ModelObject | None:
+        return self._rows.get(model_object_id)
+
+    def list_by_project(self, project_id: int) -> list[ModelObject]:
+        return [o for o in self._rows.values() if o.project_id == project_id]
+
+    def add(self, model_object: ModelObject) -> ModelObject:
+        model_object = replace(model_object, id=self._next_id)
+        self._rows[model_object.id] = model_object
+        self._next_id += 1
+        return model_object
 
 
 class InMemoryDrawingRepository(DrawingRepository):

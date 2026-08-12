@@ -26,9 +26,14 @@ from application.use_cases.drawing_use_cases import (
     ListDrawingVersions,
 )
 from application.use_cases.location_use_cases import ListLocations
+from application.use_cases.model_object_use_cases import GetModelObject, ListModelObjects
 from application.use_cases.oauth_use_cases import IssueTokenFromAuthorizationCode, RefreshOAuthToken
 from application.use_cases.project_use_cases import GetProject, ListProjects
 from application.use_cases.rfi_use_cases import CloseRFI, GetRFI, ListRFIs, RespondToRFI
+from application.use_cases.schedule_activity_use_cases import (
+    GetScheduleActivity,
+    ListScheduleActivities,
+)
 from application.use_cases.spec_use_cases import ListSpecDivisions, ListSpecSections
 from application.use_cases.submittal_requirement_use_cases import ListSubmittalRequirements
 from application.use_cases.submittal_use_cases import (
@@ -61,10 +66,16 @@ from infrastructure.persistence.repositories.sqlalchemy_design_change_repository
 from infrastructure.persistence.repositories.sqlalchemy_location_repository import (
     SqlAlchemyLocationRepository,
 )
+from infrastructure.persistence.repositories.sqlalchemy_model_object_repository import (
+    SqlAlchemyModelObjectRepository,
+)
 from infrastructure.persistence.repositories.sqlalchemy_project_repository import (
     SqlAlchemyProjectRepository,
 )
 from infrastructure.persistence.repositories.sqlalchemy_rfi_repository import SqlAlchemyRFIRepository
+from infrastructure.persistence.repositories.sqlalchemy_schedule_activity_repository import (
+    SqlAlchemyScheduleActivityRepository,
+)
 from infrastructure.persistence.repositories.sqlalchemy_spec_repository import (
     SqlAlchemySpecDivisionRepository,
     SqlAlchemySpecSectionRepository,
@@ -168,6 +179,8 @@ get_submittal_review_status_repo = _repo_provider(SqlAlchemySubmittalReviewStatu
 get_submittal_requirement_repo = _repo_provider(SqlAlchemySubmittalRequirementRepository)
 get_submittal_repo = _repo_provider(SqlAlchemySubmittalRepository)
 get_submittal_revision_repo = _repo_provider(SqlAlchemySubmittalRevisionRepository)
+get_schedule_activity_repo = _repo_provider(SqlAlchemyScheduleActivityRepository)
+get_model_object_repo = _repo_provider(SqlAlchemyModelObjectRepository)
 
 
 # ---------------------------------------------------------------------------
@@ -345,6 +358,26 @@ def get_record_submittal_disposition(
         webhook_delivery_repo,
         webhook_dispatcher,
     )
+
+
+def get_list_schedule_activities(
+    repo=Depends(get_schedule_activity_repo),
+) -> ListScheduleActivities:
+    return ListScheduleActivities(repo)
+
+
+def get_get_schedule_activity(
+    repo=Depends(get_schedule_activity_repo),
+) -> GetScheduleActivity:
+    return GetScheduleActivity(repo)
+
+
+def get_list_model_objects(repo=Depends(get_model_object_repo)) -> ListModelObjects:
+    return ListModelObjects(repo)
+
+
+def get_get_model_object(repo=Depends(get_model_object_repo)) -> GetModelObject:
+    return GetModelObject(repo)
 
 
 def get_login_user(

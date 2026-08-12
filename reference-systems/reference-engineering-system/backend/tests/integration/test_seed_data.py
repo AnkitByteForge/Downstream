@@ -10,6 +10,9 @@ from infrastructure.persistence.repositories.sqlalchemy_drawing_repository impor
     SqlAlchemyDrawingVersionRepository,
 )
 from infrastructure.persistence.repositories.sqlalchemy_rfi_repository import SqlAlchemyRFIRepository
+from infrastructure.persistence.repositories.sqlalchemy_schedule_activity_repository import (
+    SqlAlchemyScheduleActivityRepository,
+)
 from infrastructure.persistence.repositories.sqlalchemy_submittal_repository import (
     SqlAlchemySubmittalRevisionRepository,
     SqlAlchemySubmittalReviewStatusRepository,
@@ -93,3 +96,27 @@ def test_canonical_seed_design_change_and_e_drawing(db_session):
     assert rev_1.capacity_value == 240
     assert rev_1.capacity_unit == "A_MCA"
     assert rev_1.fla_value == 200
+
+
+def test_canonical_seed_schedule_activity_3410(db_session):
+    """RES-5D canonical seed (Canonical_Demo_Dataset.md §10/§13): the frozen
+    Scenario A "sched_3410" / "Schedule Activity 3410" row exists, is
+    project-scoped to Meridian Tower, and carries no invented relationships
+    or wbs (ADR-008) — the canonical row itself specifies none."""
+    _truncate_all(db_session)
+    result = seed(db_session)
+
+    schedule_activity_repo = SqlAlchemyScheduleActivityRepository(db_session)
+    activity = schedule_activity_repo.get(result["schedule_activity_id"])
+
+    assert activity.project_id == result["project_id"]
+    assert activity.activity_code == "3410"
+    assert activity.type == "PROCUREMENT"
+    assert activity.wbs is None
+    assert activity.predecessor_ids == []
+    assert activity.successor_ids == []
+    assert activity.linked_submittal_ids == []
+    assert activity.delivery_milestone is None
+
+    activities = schedule_activity_repo.list_by_project(result["project_id"])
+    assert len(activities) == 1

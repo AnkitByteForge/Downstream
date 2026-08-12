@@ -15,6 +15,7 @@ from domain.entities import (
     OAuthClient,
     Project,
     RFI,
+    ScheduleActivity,
     SpecDivision,
     SpecSection,
     Submittal,
@@ -48,6 +49,9 @@ from infrastructure.persistence.repositories.sqlalchemy_project_repository impor
     SqlAlchemyProjectRepository,
 )
 from infrastructure.persistence.repositories.sqlalchemy_rfi_repository import SqlAlchemyRFIRepository
+from infrastructure.persistence.repositories.sqlalchemy_schedule_activity_repository import (
+    SqlAlchemyScheduleActivityRepository,
+)
 from infrastructure.persistence.repositories.sqlalchemy_spec_repository import (
     SqlAlchemySpecDivisionRepository,
     SqlAlchemySpecSectionRepository,
@@ -109,6 +113,7 @@ def seed(session: Session) -> dict:
     submittal_repo = SqlAlchemySubmittalRepository(session)
     revision_repo = SqlAlchemySubmittalRevisionRepository(session)
     design_change_repo = SqlAlchemyDesignChangeRepository(session)
+    schedule_activity_repo = SqlAlchemyScheduleActivityRepository(session)
 
     discipline_repo.add(Discipline(code="M", name="Mechanical"))
     discipline_repo.add(Discipline(code="E", name="Electrical"))
@@ -295,6 +300,24 @@ def seed(session: Session) -> dict:
         )
     )
     rfi = rfi_repo.update(rfi_transitions.close_rfi(rfi, RFI_CLOSED_AT))
+
+    # --- ScheduleActivity (RES-5D): the frozen Scenario A row, Canonical_
+    # Demo_Dataset.md §10/§13 — "sched_3410" / "Schedule Activity 3410".
+    # The canonical row supplies no wbs, no relationships, and no type
+    # (table shows "N/A" lifecycle position, value 0); wbs is left null
+    # rather than invented, and `type=PROCUREMENT` is an inferred, documented
+    # judgment call (ADR-008). Its §13 graph edge
+    # `(Grid B-4)-[location_adjacent, confidence:0.44]->(Schedule Activity 3410)`
+    # is a Downstream Reasoning Pipeline output, not an RES-owned field or
+    # relationship — deliberately not reproduced here (ADR-008).
+    sched_3410 = schedule_activity_repo.add(
+        ScheduleActivity(
+            id=None,
+            project_id=project.id,
+            activity_code="3410",
+            type="PROCUREMENT",
+        )
+    )
 
     # --- Scenario B ("The HVAC Upsize") — Canonical_Demo_Dataset.md §7-9 ---
     coastal_aire = vendor_repo.add(Vendor(id=None, project_id=project.id, name="Coastal Aire Equipment"))
@@ -569,5 +592,6 @@ def seed(session: Session) -> dict:
         "submittal_rev1_id": rev_1.id,
         "design_change_id": asi_07.id,
         "design_change_drawing_id": e_drawing.id,
+        "schedule_activity_id": sched_3410.id,
         "demo_password": DEMO_PASSWORD,
     }

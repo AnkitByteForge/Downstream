@@ -1,6 +1,6 @@
 # Downstream — Implementation Status
 
-**Last updated:** 2026-08-10 (RES-4G final verification checkpoint)
+**Last updated:** 2026-08-12 (RES-5 backend surface: ScheduleActivity/ModelObject verified — frontend/Playwright/Docker verification in progress)
 **Purpose of this document:** a single reference for exactly what has been built so far, in what order, and why — so any future session (human or agent) can pick up work without re-deriving decisions already made. This file is a living status record, not a frozen design document; it does not belong in `/docs` and carries no architectural authority of its own. If it ever disagrees with `/docs`, `/docs` wins.
 
 ---
@@ -58,9 +58,9 @@ Every decision below traces back to the seven frozen documents in `/docs`, read 
 | `packages/*` (5 packages) | **Implemented** — real, tested Pydantic models and an ABC. This is Milestone 0 (Downstream's own shared contracts — not used by the Reference Engineering System, see §10.1). |
 | `infra/` | `docker-compose.yml` now wires the Reference Engineering System's three containers (db/backend/frontend); every other service entry is still scaffold-only, matching the blueprint. `mocks/Reference Engineering System/` was removed — superseded by `reference-systems/reference-engineering-system/` (see §10). `mocks/Reference Commercial System/` remains an empty placeholder. |
 | `reference-systems/reference-engineering-system/` | **RES-1 + RES-2 + RES-3 + RES-4 implemented** — FastAPI backend (Clean Architecture) + Next.js frontend, both real, both tested, both containerized and verified end to end. RES-3 adds Submittals (parent/child revisioning, ADR-004), a configuration-driven procurement-release gate (ADR-003), Submittal Packages (ADR-005, unused by seed data), Vendors, minimal Commitments, the spec-driven Submittal Register, and the Submittal Register/Detail + Specification Browser frontend pages. RES-4 adds the Design Change (ASI/CCD/Bulletin) family per ADR-007 — domain/lifecycle (RES-4A), backend surface (RES-4B), frontend register/detail (RES-4C), canonical ASI-07/DWG-E-1.1 seed (RES-4D), API contract suite + RFI-source link (RES-4E), project-isolation/scope-containment contracts (RES-4F), and this session's final verification checkpoint (RES-4G) — see §14, §15, §16. |
-| Tests | 201 `packages/*` unit tests (unchanged) + **127 Reference Engineering System backend tests** (all tiers) passing against a freshly migrated schema — including the seed assertion test and the design-changes/project-isolation contract suites. Frontend: build + typecheck + lint clean; live dev-server smoke of the Design Changes register/detail pages returned 200; no automated frontend tests yet (Playwright suite is RES-5 scope). |
+| Tests | 201 `packages/*` unit tests (unchanged) + **157 Reference Engineering System backend tests** (all tiers) passing against a freshly migrated, freshly seeded schema — including the seed assertion tests and the design-changes/submittals/schedule-activities/model-objects/project-isolation contract suites. Frontend: build + typecheck + lint clean through RES-4; RES-5 frontend/Playwright verification in progress (§17.9/§17.10). |
 | Downstream Milestone (per blueprint §9) | Milestone 0 complete. Milestones 1–5 not started — unaffected by this phase. |
-| Reference Engineering System Milestone (per RES-3 Plan v2 §3) | **RES-1, RES-2, RES-3 complete.** **RES-4 complete — RES-4A through RES-4G, each verified in turn** — see §14 (A/B), §15 (C/D), §16 (E/F/G). Field Issues and RES-5 not started. |
+| Reference Engineering System Milestone (per RES-3 Plan v2 §3) | **RES-1, RES-2, RES-3, RES-4 complete.** **RES-5 backend surface complete and verified** (ScheduleActivity/ModelObject — §17); frontend/Playwright/Docker verification in progress. Field Issues remain unscoped (§17.1). |
 
 ---
 
@@ -841,4 +841,173 @@ test DB:
     the :9999 sink).
 - **Repo hygiene**: working tree clean, `git diff --check` clean, no commit on
   this session's doc updates (per standing instruction).
+
+---
+
+## 17. Phase 7 — Reference Engineering System: RES-5 (ScheduleActivity, ModelObject)
+
+### 17.1 Scope, authority, and a flagged contradiction
+
+RES-5 completes the entity list `The Reference Engineering System.md` §16
+names and RES-4 explicitly deferred: `ScheduleActivity` and `ModelObject`
+(ADR-008). Per the approved RES-5 milestone scope: these two entities, their
+required relationships/APIs, contract/architecture tests, frontend
+navigation/UX, Playwright E2E coverage, Docker/README/final verification,
+and canonical seed-data integration where already approved — **not**
+`FieldIssue`, `ClashItem`, `Transmittal`, or any Downstream/Reasoning
+Pipeline work.
+
+**Flagged, not silently resolved (per instruction):** no standalone "RES-5
+plan" document exists anywhere in this repository or its git history — RES-5
+scope is derived entirely from the reference docs
+(`The Reference Engineering System.md` §16), `Canonical_Demo_Dataset.md`
+§10/§13/§21, and the RES-5 boundary already stated consistently across
+`IMPLEMENTATION_STATUS.md` §10.9/§12.9, `RES-1_USER_GUIDE.md`, and
+`docs/engineering/RES_IMPLEMENTATION_CONTEXT.md` ("RES-5 and Field Issues
+remain not started" — two separate items). `ADR-007`'s own line "FieldIssue
+is RES-5" contradicts that consistent framing; RES-5 as implemented here
+follows the majority framing and the explicit instruction that opened this
+milestone (which does not list FieldIssue), and does **not** build
+FieldIssue. Recorded in `ADR-008` as well as here so the contradiction is not
+lost.
+
+The repository was verified at the expected RES-4 state before this
+milestone began: `IMPLEMENTATION_STATUS.md` §16 (RES-4G) matched `HEAD`
+(`f64d1ad`) exactly, and the full backend suite reproduced the documented
+127-passed baseline before any RES-5 code was written.
+
+### 17.2 Architectural summary (ADR-008)
+
+Both entities are **read-only reference data** — `GET` list/get only, no
+mutation endpoints, no lifecycle, no webhook dispatch (unlike every RES-4
+entity). Key judgment calls, each recorded in `ADR-008`:
+
+- `ScheduleActivity` carries no status/lifecycle field — the "Submittal ->
+  Approval -> PO -> Fabrication -> Delivery" procurement chain §16 describes
+  is expressed as a relationship (`linked_submittal_ids`, realizing
+  `Submittal —SCHEDULED_WITH→ ScheduleActivity`), never an entity-local
+  state, per ADR-007's own "relationship, not state" precedent.
+- Predecessor/successor is **one** directed edge table
+  (`schedule_activity_predecessors`); `successor_ids` is the reverse query,
+  never an independently-stored second list.
+- `ScheduleActivity —DELIVERS→ Material` is **not implemented** — no
+  `Material` entity exists anywhere in RES's frozen scope, and inventing one
+  to satisfy a single relationship line would violate the standing
+  "do not invent entities" rule.
+- `ModelObject.resource_link_id` is a direct nullable FK to
+  `ScheduleActivity.id`, collapsing SYNCHRO's Resource intermediary into one
+  field, per the source doc's own caveat permitting the abstraction. No
+  separate `Resource` entity was introduced.
+- No location field on `ScheduleActivity` — `Canonical_Demo_Dataset.md`
+  §13's `(Grid B-4)-[location_adjacent, confidence:0.44]->(Schedule Activity
+  3410)` edge is a Downstream Reasoning Pipeline output (confidence-scored),
+  never an RES-owned field; `location_id` is not named among §16's
+  ScheduleActivity fields.
+
+### 17.3 Migration
+
+- **`0013_schedule_activities_and_model_objects.py`** — `schedule_activities`
+  (id, project_id, activity_code, type, wbs nullable, delivery_milestone
+  nullable), `schedule_activity_predecessors` (self-join edge table),
+  `schedule_activity_submittals` (join to `submittals`), `model_objects`
+  (id, project_id, discipline_code, appearance_profile, location_id nullable
+  FK -> `locations`, resource_link_id nullable FK -> `schedule_activities`).
+  Verified twice: applied cleanly against the running dev schema (0012 head),
+  and separately from a **completely empty** database (`reference_engineering`
+  dropped and recreated on `res-test-db`) alongside migrations 0001–0012 in
+  one `alembic upgrade head` run.
+
+### 17.4 API endpoints
+
+```
+GET /rest/v1.0/projects/{project_id}/schedule_activities
+GET /rest/v1.0/projects/{project_id}/schedule_activities/{schedule_activity_id}
+GET /rest/v1.0/projects/{project_id}/model_objects
+GET /rest/v1.0/projects/{project_id}/model_objects/{model_object_id}
+```
+
+Both mounted in the existing rate-limited `_rest` router group — inherit
+`enforce_rate_limit`, `PageParams`/`paginate()`, `X-Total`,
+`ActingContext.require_project`/`require_scope`/`ensure_resource_in_project`
+automatically, zero new cross-cutting code (same pattern as `vendors.py` for
+list, `design_changes.py` for get-by-id's 404-hide semantics).
+
+### 17.5 Canonical seed data (RES-5D)
+
+`meridian_tower.py` seeds exactly one `ScheduleActivity` — the frozen
+`sched_3410` / "Schedule Activity 3410" row from `Canonical_Demo_Dataset.md`
+§10/§13, `activity_code="3410"`, inserted immediately after RFI-214 closes
+(the same Scenario A section that row belongs to). Per the canonical row's
+own placeholders ("—" wbs, "N/A" lifecycle position, no relationships):
+`wbs=None` (left null, not invented), `type="PROCUREMENT"` (an inferred,
+documented judgment call — ADR-008), no predecessors/successors/linked
+submittals. **No `ModelObject` is seeded** — no canonical instance is named
+anywhere in the frozen or reference docs, matching RES-3's own precedent for
+`SubmittalPackage` (real, functional entity; zero seeded rows).
+`tests/integration/test_seed_data.py::test_canonical_seed_schedule_activity_3410`
+asserts the seeded row's exact shape and that it is the project's only
+`ScheduleActivity`.
+
+### 17.6 Tests
+
+**157 backend tests, all passing** (was 127 at RES-4G; 12 new domain +
+4 new application + 13 new contract + 1 new seed-assertion test = 157),
+run twice in a row against a **completely fresh** schema (dropped/recreated
+`reference_engineering`, 13 migrations, then `run_seed`):
+
+- `tests/unit/domain/test_schedule_activity.py`,
+  `tests/unit/domain/test_model_object.py` — closed-vocabulary validation
+  (every `SCHEDULE_ACTIVITY_TYPES`/`APPEARANCE_PROFILES` value accepted, an
+  invalid value rejected), default-empty relationship lists.
+- `tests/unit/application/test_schedule_activity_model_object_use_cases.py`
+  — `List*`/`Get*` against in-memory fakes (`InMemoryScheduleActivityRepository`,
+  `InMemoryModelObjectRepository`, added to `tests/unit/application/fakes.py`),
+  project-filtering and `NotFound` on a missing id.
+- `tests/contract/test_schedule_activities_and_model_objects_api.py` (new
+  `res5_contract_fixture` in `tests/contract/conftest.py`, two isolated
+  projects) — auth required, `X-Total`, full contract-field shape,
+  under-scoped-integration empty-list/404-get, cross-project list/get 404 —
+  for both entities.
+- `tests/integration/test_seed_data.py` — extended with the `sched_3410`
+  assertion (§17.5).
+- `tests/architecture/test_layer_boundaries.py` — unchanged, still passes
+  with the new `domain/entities/schedule_activity.py`,
+  `domain/entities/model_object.py`,
+  `application/use_cases/schedule_activity_use_cases.py`,
+  `application/use_cases/model_object_use_cases.py` in place (confirms
+  neither imports FastAPI/SQLAlchemy).
+
+**Live API smoke test** (backend on :8000, seeded Meridian Tower, fresh
+schema): login as Ananya Rao → `GET .../schedule_activities` returns
+`X-Total: 1`, the seeded `sched_3410` row with every contract field present
+and correctly null/empty; `GET .../schedule_activities/1` matches;
+`GET .../model_objects` returns `X-Total: 0`, `[]` (correctly unseeded).
+
+### 17.7 Files
+
+- `docs/adr/ADR-008.md` — this milestone's structural decisions.
+- Migration: `0013_schedule_activities_and_model_objects.py`.
+- Domain: `domain/entities/{schedule_activity,model_object}.py`,
+  `domain/repositories/{schedule_activity,model_object}_repository.py`.
+- Infrastructure: `orm_models/{schedule_activity,model_object}.py`,
+  `repositories/sqlalchemy_{schedule_activity,model_object}_repository.py`.
+- Application: `use_cases/{schedule_activity,model_object}_use_cases.py`.
+- API: `schemas/{schedule_activity,model_object}.py`,
+  `v1/{schedule_activities,model_objects}.py`; `api/deps.py` and
+  `api/v1/router.py` wiring.
+- Seed: `seed/meridian_tower.py` (sched_3410).
+- Tests: as listed in §17.6.
+
+### 17.8 Remaining limitations / what RES-5's backend does not do
+
+- **No frontend, no Playwright E2E coverage yet** — §17.9/§17.10 below.
+- **No `Material` entity** — `ScheduleActivity —DELIVERS→ Material` is
+  unimplemented by design (§17.2); revisit only if a future milestone
+  actually needs it, with real canonical seed data to ground it.
+- **No mutation/lifecycle** on either entity, by design (ADR-008) — nothing
+  in the frozen docs describes RES itself authoring schedule activities or
+  model objects; both are synced-in reference data in real practice.
+- **`FieldIssue` remains fully unscoped** — see §17.1's flagged contradiction.
+- **`docker-compose.yml`'s pre-existing `apps/*` path issue** — unchanged,
+  still out of scope.
 

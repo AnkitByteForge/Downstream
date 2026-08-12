@@ -9,9 +9,11 @@ from api.v1 import (
     design_changes,
     documents,
     locations,
+    model_objects,
     oauth,
     projects,
     rfis,
+    schedule_activities,
     spec_divisions,
     spec_sections,
     submittal_requirements,
@@ -37,6 +39,8 @@ _rest.include_router(rfis.router)
 _rest.include_router(submittals.router)
 _rest.include_router(vendors.router)
 _rest.include_router(submittal_requirements.router)
+_rest.include_router(schedule_activities.router)
+_rest.include_router(model_objects.router)
 _rest.include_router(activity.router)
 api_router.include_router(_rest)
 

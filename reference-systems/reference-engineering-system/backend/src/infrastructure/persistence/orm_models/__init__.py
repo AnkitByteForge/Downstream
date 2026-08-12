@@ -7,9 +7,15 @@ from .design_change import (
 )
 from .drawing import DrawingModel, DrawingVersionModel, RevisionCloudModel
 from .location import LocationModel
+from .model_object import ModelObjectModel
 from .project import DisciplineModel, ProjectModel
 from .rate_limit import RateLimitStateModel
 from .rfi import RFIModel
+from .schedule_activity import (
+    ScheduleActivityModel,
+    schedule_activity_predecessor_refs,
+    schedule_activity_submittal_refs,
+)
 from .spec import SpecDivisionModel, SpecSectionModel
 from .submittal import (
     SubmittalModel,
@@ -33,8 +39,12 @@ __all__ = [
     "RevisionCloudModel",
     "DisciplineModel",
     "ProjectModel",
+    "ModelObjectModel",
     "RateLimitStateModel",
     "RFIModel",
+    "ScheduleActivityModel",
+    "schedule_activity_predecessor_refs",
+    "schedule_activity_submittal_refs",
     "SpecDivisionModel",
     "SpecSectionModel",
     "SubmittalModel",

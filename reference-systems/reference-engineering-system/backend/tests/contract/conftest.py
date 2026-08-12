@@ -8,10 +8,12 @@ from domain.entities import (
     DesignChange,
     Discipline,
     IntegrationUser,
+    ModelObject,
     OAuthClient,
     OAuthToken,
     Project,
     RFI,
+    ScheduleActivity,
     User,
     WebhookSubscription,
 )
@@ -27,6 +29,12 @@ from infrastructure.persistence.repositories.sqlalchemy_project_repository impor
 from infrastructure.persistence.repositories.sqlalchemy_rfi_repository import SqlAlchemyRFIRepository
 from infrastructure.persistence.repositories.sqlalchemy_design_change_repository import (
     SqlAlchemyDesignChangeRepository,
+)
+from infrastructure.persistence.repositories.sqlalchemy_model_object_repository import (
+    SqlAlchemyModelObjectRepository,
+)
+from infrastructure.persistence.repositories.sqlalchemy_schedule_activity_repository import (
+    SqlAlchemyScheduleActivityRepository,
 )
 from infrastructure.persistence.repositories.sqlalchemy_spec_repository import (
     SqlAlchemySpecDivisionRepository,
@@ -50,11 +58,13 @@ from infrastructure.persistence.orm_models import (
     DesignChangeModel,
     DisciplineModel,
     IntegrationUserModel,
+    ModelObjectModel,
     OAuthClientModel,
     OAuthTokenModel,
     ProjectModel,
     RateLimitStateModel,
     RFIModel,
+    ScheduleActivityModel,
     SpecDivisionModel,
     SpecSectionModel,
     SubmittalModel,
@@ -550,6 +560,140 @@ def design_change_contract_fixture():
         session.execute(
             RFIModel.__table__.delete().where(
                 RFIModel.project_id.in_([oa.id for oa in (project_a, project_b) if oa is not None])
+            )
+        )
+        for oa in (project_a, project_b):
+            if oa is not None:
+                session.execute(
+                    ProjectModel.__table__.delete().where(ProjectModel.id == oa.id)
+                )
+        session.commit()
+        session.close()
+
+
+@pytest.fixture()
+def res5_contract_fixture():
+    """Real, committed rows for the ScheduleActivity/ModelObject contract
+    tests (RES-5E) — two isolated projects, each owning one ScheduleActivity
+    and one ModelObject, plus full- and partial-scope integration credentials
+    on project A and a full-scope credential on project B. Mirrors
+    ``design_change_contract_fixture``'s shape for a read-only surface (no
+    webhook subscription — neither entity dispatches one, ADR-008)."""
+    session = SessionLocal()
+    hasher = Pbkdf2PasswordHasher()
+    grade = {"tokens": [], "clients": [], "integration_users": []}
+    project_a = project_b = None
+    try:
+        project_repo = SqlAlchemyProjectRepository(session)
+        schedule_activity_repo = SqlAlchemyScheduleActivityRepository(session)
+        model_object_repo = SqlAlchemyModelObjectRepository(session)
+        integration_repo = SqlAlchemyIntegrationUserRepository(session)
+        client_repo = SqlAlchemyOAuthClientRepository(session)
+        token_repo = SqlAlchemyOAuthTokenRepository(session)
+
+        project_a = project_repo.add(
+            Project(id=None, name="RES-5 Contract Project A", spec_format="MF2020")
+        )
+        project_b = project_repo.add(
+            Project(id=None, name="RES-5 Contract Project B", spec_format="MF2020")
+        )
+        activity_a = schedule_activity_repo.add(
+            ScheduleActivity(id=None, project_id=project_a.id, activity_code="A-1", type="TASK")
+        )
+        activity_b = schedule_activity_repo.add(
+            ScheduleActivity(id=None, project_id=project_b.id, activity_code="B-1", type="TASK")
+        )
+        model_object_a = model_object_repo.add(
+            ModelObject(
+                id=None,
+                project_id=project_a.id,
+                discipline_code="E",
+                appearance_profile="INSTALL",
+                resource_link_id=activity_a.id,
+            )
+        )
+        model_object_b = model_object_repo.add(
+            ModelObject(
+                id=None, project_id=project_b.id, discipline_code="M", appearance_profile="REMOVE"
+            )
+        )
+
+        def _credential(client_prefix, project_id, scope):
+            integration_user = integration_repo.add(
+                IntegrationUser(
+                    id=None, project_id=project_id, name=f"RES-5 Contract {client_prefix}", permission_scope=scope
+                )
+            )
+            client = client_repo.add(
+                OAuthClient(
+                    client_id=client_prefix,
+                    client_secret_hash=hasher.hash("contract-test-secret"),
+                    integration_user_id=integration_user.id,
+                )
+            )
+            token = token_repo.add(
+                OAuthToken(
+                    access_token=f"{client_prefix}-access",
+                    refresh_token=f"{client_prefix}-refresh",
+                    client_id=client.client_id,
+                    expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+                )
+            )
+            grade["tokens"].append(token)
+            grade["clients"].append(client)
+            grade["integration_users"].append(integration_user.id)
+            return token.access_token
+
+        token_a_full = _credential("res5-contract-full-a", project_a.id, PermissionScope.full())
+        token_a_partial = _credential(
+            "res5-contract-partial-a", project_a.id, PermissionScope.partial("rfis")
+        )
+        token_b_full = _credential("res5-contract-full-b", project_b.id, PermissionScope.full())
+
+        session.commit()
+
+        yield {
+            "project_a": project_a.id,
+            "project_b": project_b.id,
+            "schedule_activity_a": activity_a.id,
+            "schedule_activity_b": activity_b.id,
+            "model_object_a": model_object_a.id,
+            "model_object_b": model_object_b.id,
+            "token_a_full": token_a_full,
+            "token_a_partial": token_a_partial,
+            "token_b_full": token_b_full,
+        }
+    finally:
+        client_ids = [c.client_id for c in grade["clients"]]
+        session.execute(
+            RateLimitStateModel.__table__.delete().where(
+                RateLimitStateModel.client_id.in_(client_ids)
+            )
+        )
+        for tok in grade["tokens"]:
+            session.execute(
+                OAuthTokenModel.__table__.delete().where(OAuthTokenModel.client_id == tok.client_id)
+            )
+        for client in grade["clients"]:
+            session.execute(
+                OAuthClientModel.__table__.delete().where(OAuthClientModel.client_id == client.client_id)
+            )
+        for iu_id in grade["integration_users"]:
+            session.execute(
+                IntegrationUserModel.__table__.delete().where(IntegrationUserModel.id == iu_id)
+            )
+        session.execute(
+            ModelObjectModel.__table__.delete().where(
+                ModelObjectModel.project_id.in_(
+                    [oa.id for oa in (project_a, project_b) if oa is not None]
+                )
+            )
+        )
+        session.execute(
+            ScheduleActivityModel.__table__.delete().where(
+                ScheduleActivityModel.project_id.in_(
+                    [oa.id for oa in (project_a, project_b) if oa is not None]
+                )
             )
         )
         for oa in (project_a, project_b):

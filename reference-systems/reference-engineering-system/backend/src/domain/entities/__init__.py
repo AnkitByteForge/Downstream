@@ -1,8 +1,10 @@
 from .drawing import Drawing, DrawingVersion
 from .design_change import DesignChange
 from .location import Location
+from .model_object import ModelObject
 from .project import Discipline, Project
 from .rfi import RFI
+from .schedule_activity import ScheduleActivity
 from .spec import SpecDivision, SpecSection
 from .submittal import (
     Submittal,
@@ -20,9 +22,11 @@ __all__ = [
     "DrawingVersion",
     "DesignChange",
     "Location",
+    "ModelObject",
     "Discipline",
     "Project",
     "RFI",
+    "ScheduleActivity",
     "SpecDivision",
     "SpecSection",
     "Submittal",

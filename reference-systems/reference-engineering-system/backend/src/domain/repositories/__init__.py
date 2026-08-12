@@ -1,8 +1,10 @@
 from .design_change_repository import DesignChangeRepository
 from .drawing_repository import DrawingRepository, DrawingVersionRepository
 from .location_repository import LocationRepository
+from .model_object_repository import ModelObjectRepository
 from .project_repository import DisciplineRepository, ProjectRepository
 from .rfi_repository import RFIRepository
+from .schedule_activity_repository import ScheduleActivityRepository
 from .spec_repository import SpecDivisionRepository, SpecSectionRepository
 from .submittal_repository import (
     SubmittalPackageRepository,
@@ -25,9 +27,11 @@ __all__ = [
     "DrawingRepository",
     "DrawingVersionRepository",
     "LocationRepository",
+    "ModelObjectRepository",
     "DisciplineRepository",
     "ProjectRepository",
     "RFIRepository",
+    "ScheduleActivityRepository",
     "SpecDivisionRepository",
     "SpecSectionRepository",
     "SubmittalPackageRepository",
