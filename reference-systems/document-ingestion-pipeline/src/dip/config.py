@@ -11,6 +11,21 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from PIL import Image
+
+# DIP renders its own pages at scale 6.0 (18144x12960 = ~235M pixels),
+# which exceeds Pillow's default MAX_IMAGE_PIXELS (~89.5M, warn) and its
+# hard-error threshold (2x that, ~179M) outright — confirmed directly: a
+# real DecompressionBombError was raised reloading a scale-6.0 render from
+# cache during the Phase C reliability investigation. Raised deliberately
+# and only here, to a bounded (not unlimited) ceiling comfortably above
+# what this pipeline's own known, fixed render-scale range ever produces —
+# this is safe specifically because every image DIP opens is either (a) a
+# render this same process just produced from a page count/scale it
+# already controls, or (b) that same render reloaded from DIP's own cache;
+# never an arbitrary, untrusted, externally-supplied image file.
+Image.MAX_IMAGE_PIXELS = 300_000_000
+
 # Repo layout: this file is at
 # reference-systems/document-ingestion-pipeline/src/dip/config.py
 REPO_ROOT = Path(__file__).resolve().parents[4]
@@ -71,23 +86,56 @@ RENDER_SCALE = 2.0
 # born-digital line-art image with a strongly bimodal pixel-value
 # histogram (near-0 ink, near-255 background — no scan noise to fight),
 # so a fixed binarization threshold is appropriate here (never assumed for
-# a scanned source without re-validating this constant).
+# a scanned source without re-validating this constant). Pixel intensity
+# is scale-independent (it's a color threshold, not a size), so this one
+# constant does NOT need to scale with render_scale — confirmed by the
+# reliability investigation: the same 128 value worked cleanly at every
+# scale tested (2.0/4.0/6.0).
 GRID_DARK_PIXEL_THRESHOLD = 128
-GRID_LINE_MERGE_GAP_PX = 3
-GRID_MAX_ROW_PITCH_PX = 80
 
-# Row and column line-density floors are DIFFERENT, deliberately, not the
-# same constant reused: measured directly against the real E0.4 render, a
-# genuine horizontal ruling line's row-density sits around 0.63-0.68
-# (0.3 cleanly separates it from blank rows). Column density is noisier —
-# coincidental vertical alignment of repeated digits/text across many rows
-# produces a "candidate" cluster in the 0.3-0.6 density range, distinct
-# from genuine full-height vertical rules, which measured >=0.9 in every
-# case sampled. 0.85 was chosen as the floor between these two measured
-# clusters (see the percentile evidence in the implementation report),
-# not an arbitrary guess.
+# Row and column line-density floors are FRACTIONS (dark-pixel proportion),
+# not pixel counts — dimensionless, and confirmed scale-independent by the
+# reliability investigation (the same floors correctly separated genuine
+# ruling lines from noise at every scale tested). Measured directly against
+# the real E0.4 render: a genuine horizontal ruling line's row-density sits
+# around 0.63-0.68 (0.3 cleanly separates it from blank rows). Column
+# density is noisier — coincidental vertical alignment of repeated digits/
+# text across many rows produces a "candidate" cluster in the 0.3-0.6
+# density range, distinct from genuine full-height vertical rules, which
+# measured >=0.9 in every case sampled. 0.85 was chosen as the floor
+# between these two measured clusters, not an arbitrary guess.
 GRID_MIN_ROW_LINE_DENSITY = 0.3
 GRID_MIN_COLUMN_LINE_DENSITY = 0.85
+
+# GRID_LINE_MERGE_GAP_PX and GRID_MAX_ROW_PITCH_PX ARE pixel-count
+# thresholds, and pixel counts scale linearly with render_scale by
+# construction (pdfium renders at `scale x 72 DPI`; doubling scale doubles
+# every distance in pixels). This was the genuine, scale-dependent gap the
+# reliability investigation was tasked with finding — confirmed by direct
+# measurement, not assumed: real row pitch on E0.4 measured ~30px at scale
+# 2.0 and ~60px at scale 4.0, exactly 2x, matching the scale ratio exactly.
+# Both constants below are therefore defined at a REFERENCE scale and
+# scaled linearly by grid_line_merge_gap_px()/grid_max_row_pitch_px() —
+# never used as bare module-level constants directly by grid.py.
+_GRID_THRESHOLD_REFERENCE_SCALE = 2.0
+_GRID_LINE_MERGE_GAP_PX_AT_REFERENCE_SCALE = 3
+_GRID_MAX_ROW_PITCH_PX_AT_REFERENCE_SCALE = 80
+
+
+def grid_line_merge_gap_px(render_scale: float) -> float:
+    """Pixel gap below which two candidate ruling-line detections are
+    merged into one boundary — scales linearly with render_scale because a
+    line's anti-aliased pixel width does too (measured, not assumed)."""
+    return _GRID_LINE_MERGE_GAP_PX_AT_REFERENCE_SCALE * (render_scale / _GRID_THRESHOLD_REFERENCE_SCALE)
+
+
+def grid_max_row_pitch_px(render_scale: float) -> float:
+    """Maximum pixel gap between consecutive row boundaries still
+    considered part of the same regular table band — scales linearly with
+    render_scale because real row height in pixels does too (measured
+    directly: ~30px at scale 2.0, ~60px at scale 4.0 on the real E0.4
+    render — exactly proportional to the scale ratio)."""
+    return _GRID_MAX_ROW_PITCH_PX_AT_REFERENCE_SCALE * (render_scale / _GRID_THRESHOLD_REFERENCE_SCALE)
 
 # --- Phase C: E0.4 vertical-slice identity (v1 scope, per approved decisions) ---
 E04_FILE_NAME = "02_Main_Plans_Bldg_3319.pdf"

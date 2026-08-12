@@ -182,10 +182,20 @@ def extract_new_unit_rows(
                     ]
                     field_engines[name] = fallback_engine.name
 
-        fla_raw = _cell_text(field_cells["fla"])
-        mca_raw = _cell_text(field_cells["mca"])
+        field_raw = {name: _cell_text(field_cells[name]) for name in _NEW_UNIT_FIELDS}
+        fla_raw = field_raw["fla"]
+        mca_raw = field_raw["mca"]
         fla_numeric = normalize_numeric(fla_raw)
         mca_numeric = normalize_numeric(mca_raw)
+
+        field_validation: dict[str, str] = {
+            "fed_from_panel": normalize.validate_fed_from_panel(field_raw["fed_from_panel"]),
+            "breaker_rating": normalize.validate_breaker_rating(field_raw["breaker_rating"]),
+            "conduit": normalize.validate_conduit(field_raw["conduit"]),
+            "volts": normalize.validate_volts(field_raw["volts"]),
+            "fla": normalize.validate_numeric_field(fla_raw, other_numeric_for_ratio_check=mca_numeric),
+            "mca": normalize.validate_numeric_field(mca_raw, other_numeric_for_ratio_check=fla_numeric),
+        }
 
         row_bbox = _union_bbox(tag_words)
         row_evidence = EvidenceRef(
@@ -225,10 +235,10 @@ def extract_new_unit_rows(
             EquipmentRow(
                 tag=tag_text,
                 existing_designation=_cell_text(cells.get((row_idx, colmap.existing_designation_col), [])),
-                fed_from_panel=_cell_text(field_cells["fed_from_panel"]),
-                breaker_rating=_cell_text(field_cells["breaker_rating"]),
-                conduit=_cell_text(field_cells["conduit"]),
-                volts=_cell_text(field_cells["volts"]),
+                fed_from_panel=field_raw["fed_from_panel"],
+                breaker_rating=field_raw["breaker_rating"],
+                conduit=field_raw["conduit"],
+                volts=field_raw["volts"],
                 fla=fla_raw,
                 mca=mca_raw,
                 fla_numeric=fla_numeric,
@@ -237,6 +247,7 @@ def extract_new_unit_rows(
                 tag_pattern_flag=check_tag_pattern(tag_text),
                 evidence=row_evidence,
                 field_provenance=field_provenance,
+                field_validation=field_validation,
             )
         )
 

@@ -29,7 +29,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from dip.provenance import EvidenceRef, FieldProvenance
+from dip.provenance import EvidenceRef, FieldProvenance, ValidationStatus
 
 
 class EquipmentRow(BaseModel):
@@ -85,6 +85,17 @@ class EquipmentRow(BaseModel):
             "('fed_from_panel', 'breaker_rating', 'conduit', 'volts', 'fla', 'mca'). `evidence` above "
             "is the row-identity (tag cell)'s own provenance; this map is each other field's own, "
             "which may legitimately differ (decisions 9/10)."
+        ),
+    )
+    field_validation: dict[str, ValidationStatus] = Field(
+        default_factory=dict,
+        description=(
+            "Per-New-Unit-field VALID/AMBIGUOUS/INVALID/MISSING classification, keyed the same as "
+            "field_provenance — computed by dip.extract.normalize's field-specific validators "
+            "(Phase C reliability milestone, Tasks 3/4). Never a value correction: the raw and "
+            "normalized fields above are always exactly what was extracted, regardless of this "
+            "classification — a downstream consumer checks this map to decide how much to trust a "
+            "field, this map never changes what that field says."
         ),
     )
 

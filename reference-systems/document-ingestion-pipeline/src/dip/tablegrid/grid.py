@@ -19,17 +19,41 @@ Algorithm:
     4. Column-wise darkness projection, restricted to that row band's
        vertical extent, -> vertical ruling lines.
 
-Known limitation, measured not assumed (see the implementation report):
-on the real E0.4 sheet, this detects the table's first ~59 data rows
-(y in [458, 2231] at render scale 2.0) but not the remainder of the visible
-table (which continues to roughly y=3200) — row-density measured directly
-in that lower region drops below the detection floor almost everywhere,
-with only two isolated spikes too far apart (~150px) to join the "regular
-band." The root cause was not fully diagnosed (a plausible explanation is a
-lighter rule-line weight in that portion of the source CAD drawing) and is
-left as documented, deferred follow-up work, not silently masked. The v1
-vertical slice (AH-9C plus the 8-row ground-truth sample) is entirely
-within the successfully-detected band, so this does not block Phase C v1.
+CORRECTED during the Phase C reliability milestone (was previously
+misdocumented here): this detects **all 59 real data rows** of the E0.4
+New Unit schedule table, not a partial subset. The row immediately below
+the detected band (previously assumed to be a "missing" row) is direct
+prose ("Numbered Notes:" / "General Notes:"), not another equipment row —
+confirmed by direct visual inspection of the real page at that exact
+boundary. Row-pitch uniformity across all 59 detected rows was also
+verified directly (min 29.5px / max 31.5px / mean 30.05px at scale 2.0,
+zero anomalous gaps) — no merged-row pair exists either. The earlier
+"known limitation" claim in this docstring (that the table continued to
+roughly y=3200 with more rows) was a documentation error, not a real
+extraction gap — the y=3200 region is genuinely part of the page, but it
+is the Notes section's prose text, correctly outside this function's
+scope.
+
+Scale-awareness (Phase C reliability milestone): GRID_LINE_MERGE_GAP_PX and
+GRID_MAX_ROW_PITCH_PX were found to be genuinely scale-dependent — both are
+pixel-distance thresholds, and pixel distances scale linearly with
+render_scale by construction. They are now computed via
+dip.config.grid_line_merge_gap_px()/grid_max_row_pitch_px(), calibrated at
+a reference scale and scaled linearly, confirmed against real E0.4 renders
+at scale 2.0 and 4.0 (measured row pitch: ~30px and ~60px respectively —
+exactly the 2x scale ratio). GRID_DARK_PIXEL_THRESHOLD and the two density
+floors are dimensionless/color-based and were confirmed scale-independent
+by the same investigation — they are not scaled.
+
+IMPORTANT — grid geometry is NOT the dominant cause of row loss when
+render_scale is raised to 4.0. With the scale-aware thresholds above, grid
+detection alone finds the correct ~59-60 rows at every scale tested
+(2.0/4.0/6.0). The row-count collapse observed end-to-end at scale 4.0 in
+earlier testing (59 -> 33) was traced to a *different, separate* stage:
+Tesseract's OCR pass finding zero words anywhere in the tag/existing-
+designation/existing-supply-fan column region for roughly half the rows at
+that scale — an OCR-completeness issue, not a geometry issue. See the Phase
+C reliability report for the full trace.
 """
 
 from __future__ import annotations
@@ -51,7 +75,7 @@ def _dark_mask(image: Image.Image) -> np.ndarray:
     return gray < config.GRID_DARK_PIXEL_THRESHOLD
 
 
-def _candidate_boundaries_1d(density: np.ndarray, min_density: float, merge_gap: int) -> list[float]:
+def _candidate_boundaries_1d(density: np.ndarray, min_density: float, merge_gap: float) -> list[float]:
     """Contiguous runs of density >= min_density, each merged into one
     boundary at its midpoint."""
     candidate_indices = np.where(density >= min_density)[0]
@@ -105,12 +129,12 @@ def detect_grid(
     guessed/fabricated grid.
     """
     dark = _dark_mask(image)
+    merge_gap = config.grid_line_merge_gap_px(render_scale)
+    max_row_pitch = config.grid_max_row_pitch_px(render_scale)
 
     row_density = dark.mean(axis=1)
-    all_row_boundaries = _candidate_boundaries_1d(
-        row_density, config.GRID_MIN_ROW_LINE_DENSITY, config.GRID_LINE_MERGE_GAP_PX
-    )
-    row_band = _longest_regular_band(all_row_boundaries, config.GRID_MAX_ROW_PITCH_PX)
+    all_row_boundaries = _candidate_boundaries_1d(row_density, config.GRID_MIN_ROW_LINE_DENSITY, merge_gap)
+    row_band = _longest_regular_band(all_row_boundaries, max_row_pitch)
     if len(row_band) < 3:
         raise GridDetectionError(
             f"No regular ruling-line row band found on page {page_index} "
@@ -120,9 +144,7 @@ def detect_grid(
     top, bottom = row_band[0], row_band[-1]
     column_region = dark[int(top) : int(bottom) + 1, :]
     col_density = column_region.mean(axis=0)
-    col_boundaries = _candidate_boundaries_1d(
-        col_density, config.GRID_MIN_COLUMN_LINE_DENSITY, config.GRID_LINE_MERGE_GAP_PX
-    )
+    col_boundaries = _candidate_boundaries_1d(col_density, config.GRID_MIN_COLUMN_LINE_DENSITY, merge_gap)
     if len(col_boundaries) < 2:
         raise GridDetectionError(
             f"No vertical ruling-line boundaries found within the detected row band "

@@ -20,6 +20,22 @@ ExtractionMethod = Literal[
     "synthetic_fixture",
 ]
 
+# Phase C reliability milestone (Task 3): the explicit three/four-state
+# classification every field-specific validator in dip.extract.normalize
+# returns. Lives here, not in dip.extract, because it's a shared,
+# foundational provenance/quality concept — dip.diff.models.EquipmentRow
+# (Phase D, predates Phase C) references it too, and Phase D must not
+# depend on Phase C's own module.
+#   VALID     — raw text matches the field's expected shape.
+#   AMBIGUOUS — raw text present, non-placeholder, but doesn't match the
+#               expected shape (or fails a plausibility cross-check) —
+#               preserved verbatim, never repaired.
+#   INVALID   — raw text is a recognized explicit non-value placeholder
+#               (TBD, "-", "?", "N/A") — the source itself says no value
+#               applies here.
+#   MISSING   — no OCR text was found in the cell at all.
+ValidationStatus = Literal["VALID", "AMBIGUOUS", "INVALID", "MISSING"]
+
 
 class BoundingBox(BaseModel):
     """Pixel-space bounding box on a rendered page image. Optional — native
