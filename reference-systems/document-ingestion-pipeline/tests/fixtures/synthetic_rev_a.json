@@ -1,0 +1,67 @@
+{
+  "SYNTHETIC": true,
+  "disclaimer": "Hand-authored fixture data for Phase D mechanism testing ONLY. NOT derived from OCR, NOT extracted from any real DSH-Atascadero document, and MUST NOT be presented as real construction evidence anywhere downstream. The sheet name below is deliberately not a real DSH sheet number for exactly this reason.",
+  "sheet": "SYNTHETIC-DEMO-SCHEDULE",
+  "rows": [
+    {
+      "tag": "AH-9C",
+      "existing_designation": "AHU-9C",
+      "fed_from_panel": "MR6",
+      "circuit_number": "12,14,16",
+      "breaker_rating": "50/3",
+      "volts": "480",
+      "hp": "5.0",
+      "fla": "38",
+      "mca": "45",
+      "evidence": {
+        "document_id": "SYNTHETIC",
+        "file_name": "SYNTHETIC_FIXTURE_NOT_A_REAL_FILE.json",
+        "page_index": 0,
+        "page_label": "SYNTHETIC - not a real sheet",
+        "extraction_method": "synthetic_fixture",
+        "extractor_version": "fixture-0.1.0",
+        "extracted_at": "2026-01-01T00:00:00Z"
+      }
+    },
+    {
+      "tag": "AH-11B",
+      "existing_designation": "AHU-11B",
+      "fed_from_panel": "MR8",
+      "circuit_number": "20,22,24",
+      "breaker_rating": "60/3",
+      "volts": "480",
+      "hp": "7.5",
+      "fla": "44",
+      "mca": "55",
+      "evidence": {
+        "document_id": "SYNTHETIC",
+        "file_name": "SYNTHETIC_FIXTURE_NOT_A_REAL_FILE.json",
+        "page_index": 0,
+        "page_label": "SYNTHETIC - not a real sheet",
+        "extraction_method": "synthetic_fixture",
+        "extractor_version": "fixture-0.1.0",
+        "extracted_at": "2026-01-01T00:00:00Z"
+      }
+    },
+    {
+      "tag": "AH-3",
+      "existing_designation": "AHU-3",
+      "fed_from_panel": "MR2",
+      "circuit_number": "5,7,9",
+      "breaker_rating": "30/3",
+      "volts": "480",
+      "hp": "3.0",
+      "fla": "20",
+      "mca": "26",
+      "evidence": {
+        "document_id": "SYNTHETIC",
+        "file_name": "SYNTHETIC_FIXTURE_NOT_A_REAL_FILE.json",
+        "page_index": 0,
+        "page_label": "SYNTHETIC - not a real sheet",
+        "extraction_method": "synthetic_fixture",
+        "extractor_version": "fixture-0.1.0",
+        "extracted_at": "2026-01-01T00:00:00Z"
+      }
+    }
+  ]
+}
