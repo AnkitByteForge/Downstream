@@ -5,8 +5,10 @@ import type {
   DrawingOut,
   DrawingVersionOut,
   LocationOut,
+  ModelObjectOut,
   ProjectOut,
   RFIOut,
+  ScheduleActivityOut,
   SessionOut,
   SpecDivisionOut,
   SpecSectionOut,
@@ -91,6 +93,24 @@ export const designChangesApi = {
   voidChange: (projectId: number, changeId: number) =>
     apiClient.patch<DesignChangeOut>(
       `/rest/v1.0/projects/${projectId}/design_changes/${changeId}/void`
+    ),
+};
+
+export const scheduleActivitiesApi = {
+  list: (projectId: number) =>
+    apiClient.get<ScheduleActivityOut[]>(`/rest/v1.0/projects/${projectId}/schedule_activities`),
+  get: (projectId: number, scheduleActivityId: number) =>
+    apiClient.get<ScheduleActivityOut>(
+      `/rest/v1.0/projects/${projectId}/schedule_activities/${scheduleActivityId}`
+    ),
+};
+
+export const modelObjectsApi = {
+  list: (projectId: number) =>
+    apiClient.get<ModelObjectOut[]>(`/rest/v1.0/projects/${projectId}/model_objects`),
+  get: (projectId: number, modelObjectId: number) =>
+    apiClient.get<ModelObjectOut>(
+      `/rest/v1.0/projects/${projectId}/model_objects/${modelObjectId}`
     ),
 };
 

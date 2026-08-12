@@ -1,6 +1,6 @@
 # Downstream — Implementation Status
 
-**Last updated:** 2026-08-12 (RES-5 backend surface: ScheduleActivity/ModelObject verified — frontend/Playwright/Docker verification in progress)
+**Last updated:** 2026-08-12 (RES-5 complete — ScheduleActivity/ModelObject backend, frontend, canonical seed, contract tests, Playwright E2E suite, and Docker Compose all verified)
 **Purpose of this document:** a single reference for exactly what has been built so far, in what order, and why — so any future session (human or agent) can pick up work without re-deriving decisions already made. This file is a living status record, not a frozen design document; it does not belong in `/docs` and carries no architectural authority of its own. If it ever disagrees with `/docs`, `/docs` wins.
 
 ---
@@ -57,10 +57,10 @@ Every decision below traces back to the seven frozen documents in `/docs`, read 
 | `apps/*` (16 services) | **Scaffold only** — folder structure, placeholder README/Dockerfile/pyproject.toml. Zero business logic, zero APIs, zero database code. This is Downstream's own service mesh — untouched by RES-1. |
 | `packages/*` (5 packages) | **Implemented** — real, tested Pydantic models and an ABC. This is Milestone 0 (Downstream's own shared contracts — not used by the Reference Engineering System, see §10.1). |
 | `infra/` | `docker-compose.yml` now wires the Reference Engineering System's three containers (db/backend/frontend); every other service entry is still scaffold-only, matching the blueprint. `mocks/Reference Engineering System/` was removed — superseded by `reference-systems/reference-engineering-system/` (see §10). `mocks/Reference Commercial System/` remains an empty placeholder. |
-| `reference-systems/reference-engineering-system/` | **RES-1 + RES-2 + RES-3 + RES-4 implemented** — FastAPI backend (Clean Architecture) + Next.js frontend, both real, both tested, both containerized and verified end to end. RES-3 adds Submittals (parent/child revisioning, ADR-004), a configuration-driven procurement-release gate (ADR-003), Submittal Packages (ADR-005, unused by seed data), Vendors, minimal Commitments, the spec-driven Submittal Register, and the Submittal Register/Detail + Specification Browser frontend pages. RES-4 adds the Design Change (ASI/CCD/Bulletin) family per ADR-007 — domain/lifecycle (RES-4A), backend surface (RES-4B), frontend register/detail (RES-4C), canonical ASI-07/DWG-E-1.1 seed (RES-4D), API contract suite + RFI-source link (RES-4E), project-isolation/scope-containment contracts (RES-4F), and this session's final verification checkpoint (RES-4G) — see §14, §15, §16. |
-| Tests | 201 `packages/*` unit tests (unchanged) + **157 Reference Engineering System backend tests** (all tiers) passing against a freshly migrated, freshly seeded schema — including the seed assertion tests and the design-changes/submittals/schedule-activities/model-objects/project-isolation contract suites. Frontend: build + typecheck + lint clean through RES-4; RES-5 frontend/Playwright verification in progress (§17.9/§17.10). |
+| `reference-systems/reference-engineering-system/` | **RES-1 through RES-5 implemented** — FastAPI backend (Clean Architecture) + Next.js frontend, both real, both tested, both containerized and verified end to end. RES-3 adds Submittals (parent/child revisioning, ADR-004), a configuration-driven procurement-release gate (ADR-003), Submittal Packages (ADR-005, unused by seed data), Vendors, minimal Commitments, the spec-driven Submittal Register, and the Submittal Register/Detail + Specification Browser frontend pages. RES-4 adds the Design Change (ASI/CCD/Bulletin) family per ADR-007 — domain/lifecycle (RES-4A), backend surface (RES-4B), frontend register/detail (RES-4C), canonical ASI-07/DWG-E-1.1 seed (RES-4D), API contract suite + RFI-source link (RES-4E), project-isolation/scope-containment contracts (RES-4F), and RES-4G's final verification checkpoint — see §14, §15, §16. RES-5 adds ScheduleActivity/ModelObject per ADR-008 — read-only domain/backend surface + canonical `sched_3410` seed + contract tests (RES-5A/B/D/E), Schedule/Model Objects frontend registers (RES-5C), the system's first Playwright E2E suite (RES-5F), and Docker Compose verification (RES-5G) — see §17. |
+| Tests | 201 `packages/*` unit tests (unchanged) + **157 Reference Engineering System backend tests** (all tiers) passing against a freshly migrated, freshly seeded schema — including the seed assertion tests and the design-changes/submittals/schedule-activities/model-objects/project-isolation contract suites. Frontend: build + typecheck + lint clean, including the two new RES-5 routes. **12 Playwright E2E specs, all passing** (§17.10) — the first browser-automation coverage for this system. |
 | Downstream Milestone (per blueprint §9) | Milestone 0 complete. Milestones 1–5 not started — unaffected by this phase. |
-| Reference Engineering System Milestone (per RES-3 Plan v2 §3) | **RES-1, RES-2, RES-3, RES-4 complete.** **RES-5 backend surface complete and verified** (ScheduleActivity/ModelObject — §17); frontend/Playwright/Docker verification in progress. Field Issues remain unscoped (§17.1). |
+| Reference Engineering System Milestone (per RES-3 Plan v2 §3) | **RES-1 through RES-5 complete** — ScheduleActivity/ModelObject backend+frontend+seed+contract tests+Playwright+Docker all verified (§17). Field Issues remain unscoped — a flagged, unresolved documentation contradiction (§17.1). |
 
 ---
 
@@ -1010,4 +1010,82 @@ and correctly null/empty; `GET .../schedule_activities/1` matches;
 - **`FieldIssue` remains fully unscoped** — see §17.1's flagged contradiction.
 - **`docker-compose.yml`'s pre-existing `apps/*` path issue** — unchanged,
   still out of scope.
+
+### 17.9 Frontend (RES-5C)
+
+Two new register pages, consuming only real backend endpoints
+(`credentials: "include"`, no bypass), following the existing register
+pattern (`vendors`-style read-only list, no detail sub-route — neither entity
+has enough sub-structure to warrant one):
+
+| Route | Backed by |
+|---|---|
+| `/projects/[projectId]/schedule` | `GET .../schedule_activities` — activity code, type, wbs, predecessor/successor codes (cross-referenced within the page's own fetched list), linked-submittal count, delivery milestone |
+| `/projects/[projectId]/model-objects` | `GET .../model_objects` — discipline, appearance profile, location name (`locationsApi`), resource-link activity code (`scheduleActivitiesApi`) |
+
+`AppShell`'s project-context nav gained "Schedule" (`CalendarClock` icon) and
+"Model Objects" (`Boxes` icon) links. `api-client/types.ts` gained
+`ScheduleActivityOut`/`ModelObjectOut`; `api-client/index.ts` gained
+`scheduleActivitiesApi`/`modelObjectsApi`.
+
+**Verified:** `npm run build` (incl. real TypeScript check) — both new routes
+listed, zero errors; targeted ESLint on the new pages, api-client, and
+`app-shell.tsx` — clean; live dev-server smoke of both routes returned 200.
+
+### 17.10 Playwright E2E suite (RES-5F)
+
+The first browser-automation coverage for the Reference Engineering System
+frontend — explicitly deferred by every prior milestone (§10.6, §11.9, §16).
+`@playwright/test` added as a dev dependency (`npm run test:e2e`),
+`playwright.config.ts` (chromium only, `baseURL` :3100, assumes the backend
+and a seeded database are already running — the suite reads the canonical
+seed, it creates no fixtures of its own).
+
+12 specs across three files, all passing against the canonical seed:
+
+- `e2e/login.spec.ts` — valid login reaches the dashboard; invalid password
+  shows an error and stays on `/login`; an unauthenticated visit to a
+  project page redirects to `/login` (`useRequireSession`'s 401 handling).
+- `e2e/navigation.spec.ts` — golden-path click-through of every pre-existing
+  register/detail page via the sidebar nav (RFIs, RFI detail, Drawings,
+  Submittals, Design Changes, Specifications, Activity), each asserted to
+  render real seeded content (RFI-214, M-2.1, SUB-118, ASI-07/ISSUED,
+  Spec 23 31 13) — not just a 200 status.
+- `e2e/schedule-and-model-objects.spec.ts` — RES-5's own two pages: the
+  Schedule register shows the canonical `sched_3410` row with its `PROCUREMENT`
+  type and null-`wbs` em-dash placeholder (not a fabricated value); the Model
+  Objects register shows its empty state, since no canonical instance exists
+  (§17.5/ADR-008).
+
+One real bug caught on the first run: `login.spec.ts`'s dashboard assertion
+matched two elements ("Meridian Tower" appears in both the page subtitle and
+a stat card) — a strict-mode violation, not a product bug. Fixed with
+`.first()`. All 12 pass on the second run.
+
+### 17.11 Docker Compose verification (RES-5G)
+
+Base images (`node:20-slim`, `python:3.11-slim`) required a retry after a
+transient registry connectivity failure on the first pull — not a code
+issue. Rebuilt both images
+(`docker compose -f infra/docker-compose.yml up -d --build
+reference-engineering-db reference-engineering-backend
+reference-engineering-frontend`); the frontend build log shows the same
+clean `npm run build` output (both new routes, zero TypeScript errors) as
+the host-side build in §17.9.
+
+The compose DB volume held three-day-old data from a prior verification
+session (pre-RES-5) — dropped and recreated for a genuinely fresh check,
+matching RES-4G's precedent: `alembic upgrade head` ran all 13 migrations
+clean on the empty containerized database, `python -m seed.run_seed` seeded
+successfully (`schedule_activity_id: 1` in its output), and a live smoke test
+against the running containers confirmed `GET
+/rest/v1.0/projects/1/schedule_activities` returns the exact `sched_3410`
+payload and both new frontend routes return 200. All three containers
+stopped (not removed) afterward, per established convention.
+
+**One incidental port conflict, unrelated to Docker itself:** this session's
+own earlier host-side dev-server smoke test (§17.9) had left a stray `next
+dev --port 3100` process running, which collided with the frontend
+container's port binding. Identified via `Get-NetTCPConnection`/`Get-Process`
+and stopped before retrying — not a docker-compose or code defect.
 

@@ -78,11 +78,13 @@ RES-4G verified (2026-08-10, uncommitted this session):
   configs + canonical `webhook_deliveries` behavior intact.
 - Working tree clean; `git diff --check` clean; no commit staged.
 
-RES-5 backend surface — VERIFIED (2026-08-12): ScheduleActivity + ModelObject
-domain/migration/API/seed/contract tests, 157 backend tests passing from a
-fresh schema (see IMPLEMENTATION_STATUS.md §17, ADR-008). Frontend/Playwright/
-Docker verification in progress. Field Issues remain unscoped — a flagged
-contradiction with ADR-007's "FieldIssue is RES-5" phrasing; see §17.1.
+RES-5 — VERIFIED (2026-08-12): ScheduleActivity + ModelObject
+domain/migration/API/seed/contract tests (157 backend tests from a fresh
+schema), Schedule/Model Objects frontend registers, 12 Playwright E2E specs
+(the system's first browser-automation suite), and Docker Compose all
+verified (see IMPLEMENTATION_STATUS.md §17, ADR-008). Field Issues remain
+unscoped — a flagged contradiction with ADR-007's "FieldIssue is RES-5"
+phrasing; see §17.1.
 
 ## Canonical scenarios
 

@@ -177,3 +177,28 @@ export interface DesignChangeOut {
   acknowledged_at: string | null;
   voided_at: string | null;
 }
+
+export type ScheduleActivityType = "TASK" | "MILESTONE" | "PROCUREMENT";
+
+export interface ScheduleActivityOut {
+  id: number;
+  project_id: number;
+  activity_code: string;
+  type: ScheduleActivityType;
+  wbs: string | null;
+  predecessor_ids: number[];
+  successor_ids: number[];
+  linked_submittal_ids: number[];
+  delivery_milestone: string | null;
+}
+
+export type AppearanceProfile = "INSTALL" | "MAINTAIN" | "NEUTRAL" | "REMOVE" | "TEMPORARY";
+
+export interface ModelObjectOut {
+  id: number;
+  project_id: number;
+  discipline_code: string;
+  appearance_profile: AppearanceProfile;
+  location_id: number | null;
+  resource_link_id: number | null;
+}

@@ -11,6 +11,8 @@ import {
   Activity,
   ClipboardCheck,
   BookOpen,
+  CalendarClock,
+  Boxes,
   LogOut,
 } from "lucide-react";
 
@@ -116,6 +118,18 @@ export function AppShell({ session, projectId, children }: AppShellProps) {
                 icon={BookOpen}
                 label="Specifications"
                 active={pathname.startsWith(`/projects/${projectId}/specifications`)}
+              />
+              <NavLink
+                href={`/projects/${projectId}/schedule`}
+                icon={CalendarClock}
+                label="Schedule"
+                active={pathname.startsWith(`/projects/${projectId}/schedule`)}
+              />
+              <NavLink
+                href={`/projects/${projectId}/model-objects`}
+                icon={Boxes}
+                label="Model Objects"
+                active={pathname.startsWith(`/projects/${projectId}/model-objects`)}
               />
               <NavLink
                 href={`/projects/${projectId}/activity`}
