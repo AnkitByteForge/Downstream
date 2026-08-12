@@ -45,7 +45,57 @@ BENCHMARK_PAGES: tuple[tuple[str, int, str], ...] = (
     ("02_Main_Plans_Bldg_3319.pdf", 375, "E0.6 - Electrical Panel Schedules"),
     ("03_Electrical_Plans_Bldg_4872.pdf", 43, "EE5.1 - Single Line Diagram"),
 )
+# DELIBERATELY LEFT AT 2.0 — an unresolved, flagged contradiction, not a
+# silent decision. The Phase C render-scale experiment (2.0/4.0/6.0,
+# measured against all 3 benchmark pages, both engines — see the
+# implementation report) found 4.0 measurably better for raw OCR quality:
+# it matches 6.0's peak Tesseract known-token recovery on E0.4 (5/6, no
+# further gain at 6.0) at much lower runtime and noise, and resolves E0.6's
+# scale-2.0 runtime pathology (149.6s -> 30.35s) that 6.0 only partially
+# fixes. BUT switching the live pipeline's default to 4.0 was tried and
+# reverted: it broke dip.tablegrid's row-band detection (59 rows -> 33 —
+# GRID_LINE_MERGE_GAP_PX / GRID_MAX_ROW_PITCH_PX were calibrated and
+# visually validated only at scale 2.0, and don't transfer cleanly to a
+# different pixel density), and reloading a scale-4.0+ render from the
+# cache trips PIL's DecompressionBombWarning (104.5MP vs PIL's 89.5MP
+# default limit; scale 6.0 renders exceed PIL's hard error threshold
+# outright). Recalibrating the grid thresholds for scale 4.0 is real,
+# separate follow-up work, not done here — see the implementation report's
+# "what remains deferred" section. 2.0 is what dip.tablegrid is actually
+# validated against end-to-end.
 RENDER_SCALE = 2.0
+
+# --- Phase C: table-grid detection (ruling-line projection profile) ---
+# Thresholds calibrated empirically against the real E0.4 render (see the
+# Phase C implementation report), not guessed: the render is a crisp,
+# born-digital line-art image with a strongly bimodal pixel-value
+# histogram (near-0 ink, near-255 background — no scan noise to fight),
+# so a fixed binarization threshold is appropriate here (never assumed for
+# a scanned source without re-validating this constant).
+GRID_DARK_PIXEL_THRESHOLD = 128
+GRID_LINE_MERGE_GAP_PX = 3
+GRID_MAX_ROW_PITCH_PX = 80
+
+# Row and column line-density floors are DIFFERENT, deliberately, not the
+# same constant reused: measured directly against the real E0.4 render, a
+# genuine horizontal ruling line's row-density sits around 0.63-0.68
+# (0.3 cleanly separates it from blank rows). Column density is noisier —
+# coincidental vertical alignment of repeated digits/text across many rows
+# produces a "candidate" cluster in the 0.3-0.6 density range, distinct
+# from genuine full-height vertical rules, which measured >=0.9 in every
+# case sampled. 0.85 was chosen as the floor between these two measured
+# clusters (see the percentile evidence in the implementation report),
+# not an arbitrary guess.
+GRID_MIN_ROW_LINE_DENSITY = 0.3
+GRID_MIN_COLUMN_LINE_DENSITY = 0.85
+
+# --- Phase C: E0.4 vertical-slice identity (v1 scope, per approved decisions) ---
+E04_FILE_NAME = "02_Main_Plans_Bldg_3319.pdf"
+E04_PAGE_INDEX = 373
+E04_SHEET_LABEL = "E0.4 - Air Handler Replacement Schedule"
+
+TABLE_GRID_DIR = DSH_DERIVED_DIR / "table_grid"
+EQUIPMENT_ROWS_DIR = DSH_DERIVED_DIR / "equipment_rows"
 
 # Tesseract binary location. PATH is not assumed — see README's
 # "Tesseract setup" section for why. Overridable via DIP_TESSERACT_CMD.

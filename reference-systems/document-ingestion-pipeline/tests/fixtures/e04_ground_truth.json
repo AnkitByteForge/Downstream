@@ -1,0 +1,90 @@
+{
+  "SYNTHETIC": false,
+  "SOURCE": "manual transcription of real E0.4",
+  "note": "Read directly from the real, rendered E0.4 page (data/reference-projects/dsh-atascadero/raw/02_Main_Plans_Bldg_3319.pdf, page index 373) during the Phase C implementation — a tightly cropped, high-resolution strip of the tag column plus the New Unit block's six columns, visually transcribed by eye, independent of and not derived from any OCR engine's output. Never confuse this fixture with tests/fixtures/synthetic_rev_a.json / synthetic_rev_b.json, which are wholly fictional Phase D mechanism-proving data.",
+  "sheet": "E0.4 - Air Handler Replacement Schedule",
+  "document_file_name": "02_Main_Plans_Bldg_3319.pdf",
+  "page_index": 373,
+  "rows": [
+    {
+      "tag": "AH-9A",
+      "existing_designation": "(E) AH-3",
+      "fed_from_panel": "MR4",
+      "breaker_rating": "60/3",
+      "conduit": "1 in",
+      "volts": "480",
+      "fla": "56.0",
+      "mca": "58.0"
+    },
+    {
+      "tag": "AH-9C",
+      "existing_designation": "(E) AHU-11",
+      "fed_from_panel": "MR4",
+      "breaker_rating": "25/3",
+      "conduit": "3/4 in",
+      "volts": "480",
+      "fla": "21.0",
+      "mca": "22.0"
+    },
+    {
+      "tag": "AH-17B",
+      "existing_designation": "(E) AH-7",
+      "fed_from_panel": "MR6",
+      "breaker_rating": "30/3",
+      "conduit": "3/4 in",
+      "volts": "480",
+      "fla": "27.0",
+      "mca": "30.0"
+    },
+    {
+      "tag": "AH-2B",
+      "existing_designation": "(E) PATIO UNIT",
+      "fed_from_panel": "MR1",
+      "breaker_rating": "20/3",
+      "conduit": "1/2 in",
+      "volts": "480",
+      "fla": "18.0",
+      "mca": "19.0"
+    },
+    {
+      "tag": "AH-GSA",
+      "existing_designation": "(E) GSA UNIT",
+      "fed_from_panel": "MR2",
+      "breaker_rating": "50/3",
+      "conduit": "1 in",
+      "volts": "480",
+      "fla": "44.0",
+      "mca": "46.0"
+    },
+    {
+      "tag": "AH-K1",
+      "existing_designation": "(E) SC-05",
+      "fed_from_panel": "MR2",
+      "breaker_rating": "30/3",
+      "conduit": "3/4 in",
+      "volts": "480",
+      "fla": "24.0",
+      "mca": "26.0"
+    },
+    {
+      "tag": "AH-MH1",
+      "existing_designation": "(E) SC-14",
+      "fed_from_panel": "MR7",
+      "breaker_rating": "40/3",
+      "conduit": "3/4 in",
+      "volts": "480",
+      "fla": "33.0",
+      "mca": "36.0"
+    },
+    {
+      "tag": "AH-24CTA",
+      "existing_designation": "(E) AH-12",
+      "fed_from_panel": "MR9",
+      "breaker_rating": "35/3",
+      "conduit": "3/4 in",
+      "volts": "480",
+      "fla": "31.0",
+      "mca": "34.0"
+    }
+  ]
+}

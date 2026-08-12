@@ -22,6 +22,15 @@ class OcrWord(BaseModel):
     top: float
     width: float
     height: float
+    line_group: str | None = Field(
+        default=None,
+        description=(
+            "Engine-specific line/block grouping hint, if the engine provides one "
+            "(Tesseract: 'block_par_line'; RapidOCR: None — it has no equivalent hierarchy). "
+            "Captured as a supporting signal for future row-grouping cross-checks (Phase C "
+            "decision 8) — engine-agnostic code must never require this field to be present."
+        ),
+    )
 
 
 class OcrResult(BaseModel):

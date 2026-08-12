@@ -56,6 +56,7 @@ class TesseractEngine:
                 conf = None
             if conf is not None and conf < 0:
                 conf = None  # tesseract uses -1 for "no confidence" rows
+            line_group = f"{data['block_num'][i]}_{data['par_num'][i]}_{data['line_num'][i]}"
             words.append(
                 OcrWord(
                     text=text,
@@ -64,6 +65,7 @@ class TesseractEngine:
                     top=float(data["top"][i]),
                     width=float(data["width"][i]),
                     height=float(data["height"][i]),
+                    line_group=line_group,
                 )
             )
             texts.append(text)

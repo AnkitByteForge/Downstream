@@ -1,6 +1,6 @@
 # Downstream — Implementation Status
 
-**Last updated:** 2026-08-12 (RES-5 complete — ScheduleActivity/ModelObject backend, frontend, canonical seed, contract tests, Playwright E2E suite, and Docker Compose all verified)
+**Last updated:** 2026-08-12 (DIP Phase C — E0.4 New Unit block extraction — implemented and verified against the real corpus; see §18)
 **Purpose of this document:** a single reference for exactly what has been built so far, in what order, and why — so any future session (human or agent) can pick up work without re-deriving decisions already made. This file is a living status record, not a frozen design document; it does not belong in `/docs` and carries no architectural authority of its own. If it ever disagrees with `/docs`, `/docs` wins.
 
 ---
@@ -61,6 +61,7 @@ Every decision below traces back to the seven frozen documents in `/docs`, read 
 | Tests | 201 `packages/*` unit tests (unchanged) + **157 Reference Engineering System backend tests** (all tiers) passing against a freshly migrated, freshly seeded schema — including the seed assertion tests and the design-changes/submittals/schedule-activities/model-objects/project-isolation contract suites. Frontend: build + typecheck + lint clean, including the two new RES-5 routes. **12 Playwright E2E specs, all passing** (§17.10) — the first browser-automation coverage for this system. |
 | Downstream Milestone (per blueprint §9) | Milestone 0 complete. Milestones 1–5 not started — unaffected by this phase. |
 | Reference Engineering System Milestone (per RES-3 Plan v2 §3) | **RES-1 through RES-5 complete** — ScheduleActivity/ModelObject backend+frontend+seed+contract tests+Playwright+Docker all verified (§17). Field Issues remain unscoped — a flagged, unresolved documentation contradiction (§17.1). |
+| `reference-systems/document-ingestion-pipeline/` (DIP) | **New sibling subsystem, not a Downstream service, not a Reference Engineering System dependency** (see the DSH ingestion architecture + post-RES-5 reconciliation docs). Phase A (PDF manifest), Phase B (OCR benchmark, Tesseract vs. RapidOCR), Phase C (E0.4 New Unit block real extraction, this session), and Phase D (deterministic synthetic revision diff) implemented and tested. Phase E (promotion into RES) explicitly not started — see §18. |
 
 ---
 
@@ -1088,4 +1089,275 @@ own earlier host-side dev-server smoke test (§17.9) had left a stray `next
 dev --port 3100` process running, which collided with the frontend
 container's port binding. Identified via `Get-NetTCPConnection`/`Get-Process`
 and stopped before retrying — not a docker-compose or code defect.
+
+---
+
+## 18. Document Ingestion Pipeline (DIP) — Phases A, B, C, D
+
+### 18.1 Scope and authority
+
+`reference-systems/document-ingestion-pipeline/` — a new sibling of
+`reference-engineering-system/` under `reference-systems/`, per
+`docs/architecture/DSH_Ingestion_Pipeline_Architecture.md` and its
+post-RES-5 reconciliation. **Not a Downstream service, not an RES
+dependency, no new service boundary, no Kafka, no Neo4j, no LLM
+extraction.** DIP turns the real DSH-Atascadero PDF corpus
+(`data/reference-projects/dsh-atascadero/raw/`, four files, untouched,
+never modified — verified by content-hash before/after in
+`tests/golden/test_manifest_against_real_corpus.py::test_source_pdfs_are_never_modified`)
+into provenance-preserving, deterministic evidence. Its own
+`pyproject.toml`/pytest config, fully independent of the root repo's 201
+`packages/*` tests and of RES's own suite — mirroring the precedent RES
+itself already established (§10.1).
+
+Approved in two sessions: Phase A (manifest) / Phase B (OCR benchmark) /
+Phase D (synthetic diff) first, then — after a dedicated OCR investigation
+and implementation plan — Phase C (real E0.4 New Unit block extraction).
+Phase E (promotion into RES) remains explicitly not started; no RES file
+was touched by any part of this work (verified via `git status` on
+`reference-systems/reference-engineering-system/` — empty).
+
+### 18.2 Phase A — PDF manifest
+
+Opens a source PDF read-only via `pypdfium2`, walks pages using page-object/
+text-layer inspection only (never rendering), classifies each page
+(`native_text`/`raster_embedded`/`vector_curve`/`mixed`) via named,
+tunable thresholds (`dip.config`), and writes a per-document manifest JSON
+plus a document registry, keyed by a streaming-computed sha256 (never loads
+a 250MB+ file whole). Idempotent by content hash.
+
+Verified directly against the real corpus, independently reproducing the
+DSH reconnaissance report's own hand-measured numbers: E0.4 (doc02 p.373)
+→ `raster_embedded`, 37.53% image coverage (recon: ~36.9%); E0.6 (p.375) →
+`raster_embedded`, 51.85% (recon: ~51.9%); EE5.1 (doc03 p.43) →
+`vector_curve`, 41,070 path objects. One honest heuristic imperfection
+documented, not hidden: E0.7 (p.376, same schedule family as E0.6)
+classifies `native_text` at 17.52% coverage — just under the 20% floor.
+
+### 18.3 Phase B — OCR benchmark
+
+Renders exactly the 3 named benchmark pages (E0.4/E0.6/EE5.1 — never the
+whole corpus) and runs every *available* OCR engine against them, recording
+results without ever computing or claiming an accuracy percentage.
+Tesseract **v5.4.0.20240606** installed via
+`winget install --id UB-Mannheim.TesseractOCR` (binary resolved via
+`DIP_TESSERACT_CMD` → `PATH` → well-known install path — never assumed to
+be on `PATH`, since winget doesn't retroactively update an already-open
+shell). RapidOCR (`rapidocr-onnxruntime`) is the pure-pip fallback
+candidate, chosen and documented before running anything (lighter install
+than `easyocr`, no PyTorch dependency, PP-OCR models tuned toward
+dense/tabular text).
+
+Both engines correctly recovered `AH-9C`/`MR6`/`MR7` from the real E0.4
+sheet — independently validating that the architecture doc's illustrative
+example reflects real sheet content (though not, it turns out, the *correct*
+real relationship — see §18.4's AH-9C finding). No engine declared an
+overall winner from this benchmark alone. Real, sometimes-surprising
+findings, all measured not assumed: Tesseract's E0.6 runtime (110–150s) was
+an 8–9x outlier against its own E0.4/EE5.1 runtimes (12–23s) in every run;
+RapidOCR produced garbled CJK-looking artifacts localized to one dense
+small-font region of EE5.1 (~21% non-ASCII tokens there, 0% on E0.4/E0.6).
+
+### 18.4 Phase C — E0.4 New Unit block extraction (this session)
+
+**OCR investigation, before implementation.** Re-examined the real
+benchmark `results.json` (word-box level) and, critically, the actual
+rendered E0.4 sheet directly (cropped and read, not OCR-mediated).
+Findings:
+
+- **Tesseract's E0.6 runtime outlier correlates with, not merely
+  coincides with, a measured spike in tiny/single-character word
+  fragments** (1036 single-char / 677 tiny boxes on E0.6 vs. 552/270 on
+  E0.4 and 483/420 on EE5.1) — reported as correlation, not proven root
+  cause.
+- **RapidOCR's EE5.1 garbling has a concrete, located signature**: a
+  repeating `■` token at a near-fixed x-position with a ~54px vertical
+  step (almost certainly a misread graphic/legend symbol column, not
+  text), plus a second cluster of genuine CJK-character tokens
+  spatially confined to one ~1200×550px region — localized, not
+  page-wide. Tesseract, checked against the exact same region, produced
+  plausible engineering fragments instead.
+- **Render-scale experiment** (2.0/4.0/6.0, both engines, all 3 pages —
+  `scripts/run_render_scale_experiment.py`,
+  `data/.../derived/render_scale_experiment/results.json`): scale 4.0
+  measurably best for raw OCR quality (matches scale 6.0's peak Tesseract
+  token recovery on E0.4 at far lower runtime/noise; fixes E0.6's
+  scale-2.0 pathology outright, 149.6s→30.35s); scale 6.0 offered no
+  measurable benefit anywhere and costs more. Neither scale improved
+  EE5.1's garbling at all — confirming it's a recognition-model issue, not
+  a resolution issue.
+- **Real, unresolved integration gap found and flagged, not silently
+  resolved**: switching the live pipeline to scale 4.0 broke
+  `dip.tablegrid`'s row-band detection (59 rows → 33 — the merge/pitch
+  thresholds were calibrated and visually validated only at scale 2.0),
+  and reloading a scale-4.0+ render from the cache trips PIL's
+  `DecompressionBombWarning` (104.5MP vs. PIL's 89.5MP default limit; scale
+  6.0 exceeds PIL's *hard* error threshold outright). `dip.config.RENDER_SCALE`
+  was **deliberately left at 2.0** — the scale `dip.tablegrid` is actually
+  validated against — with both findings documented in `config.py`'s own
+  comment as an open, unresolved decision, not quietly picked.
+- **A genuine correction to an earlier illustrative example**: direct
+  visual inspection of the real E0.4 sheet found AH-9C's real "New Unit →
+  Fed From Panel" value is **MR4**, not the MR6→MR7 story used in Phase D's
+  clearly-labeled `SYNTHETIC` fixture and the architecture doc's example.
+  The synthetic fixture was never claimed to be real and is left unchanged
+  (Phase D's job was always to prove the diff *mechanism*, not to describe
+  E0.4) — but real-source extraction (this phase) now supersedes it as the
+  source of truth for any future real-data example.
+
+**Table reconstruction — ruling-line grid detection**
+(`dip.tablegrid.grid.detect_grid`), a classical projection-profile
+technique (row/column darkness projections on the binarized rendered
+bitmap), not ML, chosen because the real E0.4 sheet has genuine drawn
+table borders (confirmed by direct visual inspection). Row and column
+density floors are deliberately **different constants**, both empirically
+calibrated against the real render (not guessed): rows at 0.3 (a clean
+signal), columns at 0.85 (columns needed a higher floor to separate
+genuine full-height rule lines, measured ≥0.9 density, from coincidental
+digit-column alignment noise, measured in the 0.3–0.6 range — a real,
+measured bimodal split, not an arbitrary threshold). Detected **59 rows ×
+35 columns** on the real E0.4 render at scale 2.0, visually validated by
+drawing the detected grid lines back onto the source image and reading the
+result directly. **Known limitation, measured not assumed**: row detection
+covers only the table's first ~59 rows (y∈[458, 2231]); the remainder of
+the visible table (to ~y=3200) has row-density that drops below the
+detection floor almost everywhere in that region — root cause not fully
+diagnosed (plausibly a lighter rule-line weight in that portion of the
+source CAD drawing), documented in `grid.py`'s own module docstring, not
+masked. Does not block v1 scope — AH-9C and all 8 ground-truth rows fall
+within the successfully-detected band.
+
+**Header scoping** (`dip.extract.header_scope.locate_new_unit_columns`) —
+never hardcoded column indices. Anchors on real header text: `"CONDUIT"`
+(confirmed unique, only in the New Unit block) and `"DESIGNATION"`
+(confirmed exactly two occurrences — identity columns), then locates the
+New Unit block's other five columns (FLA, MCA, Volts, Panel, Breaker
+Rating) at fixed offsets *relative to* the CONDUIT anchor — validated
+against real Tesseract OCR output of the actual header region, byte-exact
+match on all 6 New Unit columns.
+
+**Corrected data model** (`dip.diff.models.EquipmentRow`, modified in
+place — not a parallel model): `circuit_number`/`hp` **removed** (neither
+exists in the New Unit block — only in the two deferred Existing blocks);
+`conduit` **added** (a real New Unit column the original placeholder
+missed). `fla`/`mca` keep their original names/types (raw/display
+strings) for backward compatibility with the existing Phase D synthetic
+fixtures and tests; `fla_numeric`/`mca_numeric` are new, separate,
+null-on-parse-failure fields (decision 12). New:
+`mca_fla_suspicious`(bool, flags MCA≤FLA, never corrects — decision 13),
+`tag_pattern_flag` (bool, advisory-only AH-* mismatch — decision 15),
+`field_provenance: dict[str, FieldProvenance]` (per-New-Unit-field OCR
+confidence + extraction confidence + `EvidenceRef`, kept as two always-
+separate numbers — decision 9). `EvidenceRef` gained one new optional field,
+`ocr_engine` (decision 11) — confirmed backward compatible: every existing
+Phase A/B/D test and fixture still passes unchanged, since Pydantic's
+default field defaults make every addition here purely additive.
+
+**Numeric normalization** (`dip.extract.normalize.normalize_numeric`) —
+edge-noise tolerant (strips stray brackets/pipes *only* from the two ends
+of a string, never the middle — measured directly against real E0.4 OCR
+output, which occasionally appends such noise adjacent to a
+ruling-line-crossing cell), never coerces internally-garbled text, never
+fabricates a value from nothing. **Tag extraction**
+(`dip.extract.build._clean_tag_text`) required a second real-data-driven
+fix beyond edge-stripping: Tesseract was found, across different real runs
+of the *same* cell, to prepend a *different* stray punctuation-like
+character each time (U+FFFD once, U+2018 another time) — not one fixed,
+whitelistable character. Fixed by searching for the known-valid `AH-*`
+shape within the cell text and extracting just that substring (the tag's
+own digits/letters were correct in every case observed; only an adjacent
+non-content glyph wasn't) — falling back to edge-stripped raw text, never
+silently discarding an unusual tag, when no such pattern is found.
+
+**Engine policy** (decision 5): Tesseract is the sole default engine for a
+whole-page OCR pass. RapidOCR is invoked **only** as a per-cell fallback —
+cropping just the one New Unit field cell that came back empty from
+Tesseract and re-OCR-ing that tiny crop — never a second whole-page pass.
+Tesseract's `block_num`/`par_num`/`line_num` hierarchy is captured onto a
+new, optional `OcrWord.line_group` field (decision 8) as a documented
+supporting signal for future cross-checks; v1's `extraction_confidence`
+computation (geometric word-box/cell-boundary overlap fraction, independent
+of OCR confidence by construction) does not yet consume it — stated
+explicitly as a scope boundary, not a silently-skipped feature.
+
+**Ground truth** (`tests/fixtures/e04_ground_truth.json`, explicitly
+`"SYNTHETIC": false, "SOURCE": "manual transcription of real E0.4"` — never
+to be confused with the wholly-fictional
+`tests/fixtures/synthetic_rev_{a,b}.json`): 8 rows (AH-9A, AH-9C, AH-17B,
+AH-2B, AH-GSA, AH-K1, AH-MH1, AH-24CTA), chosen for real variability already
+observed (fully-populated rows, TBD-placeholder rows, an unusual
+"Bucket 3"/"Penthouse MCC" row, a footnoted row) — transcribed by direct,
+independent visual reading of a precisely-cropped composite image, not
+derived from or cross-checked against any OCR engine's output before being
+locked in.
+
+**Measured accuracy** (`tests/golden/test_e04_extraction_against_ground_truth.py`,
+excluded from the default run, self-skips if the corpus is absent): **91.1%
+exact field match (51/56)** across the 8 ground-truth rows × 7 compared
+fields (`existing_designation` + the 6 New Unit fields), asserted against
+an 80% floor (set with real margin under the measured 91.1%, not equal to
+it, so ordinary OCR non-determinism doesn't make the test flaky). Every
+mismatch printed, not hidden — 5 found, all genuine, real Tesseract OCR
+errors, not extraction-logic bugs: three dropped-decimal-point MCA
+misreads (`"22.0"`→`"220"`, `"26.0"`→`"260"`, `"34.0"`→`"340"`), one
+`"/"`-misread-as-`"1"` breaker rating (`"25/3"`→`"2513"`), one missing-space
+existing-designation (`"(E) GSA UNIT"`→`"(E) GSAUNIT"`). None of the three
+dropped-decimal errors happened to flip an MCA>FLA comparison, so
+`mca_fla_suspicious` never false-fired on these 8 rows — asserted as its own
+test, not assumed. Every extracted New Unit field on the (error-free)
+AH-9A row carries full provenance: `document_id`, `file_name`, `page_index`,
+`page_label`, `bounding_box`, `extraction_method`, `extractor_version`,
+`extracted_at`, `ocr_engine` — asserted directly.
+
+### 18.5 Phase D — deterministic synthetic revision diff (prior session)
+
+`dip.diff.engine.diff_schedule` — pure, deterministic, no I/O, no OCR
+import, generic over any Pydantic row model (proven by a dedicated test
+using a wholly different row type, unaffected by Phase C's `EquipmentRow`
+correction). Synthetic fixtures explicitly labeled `SYNTHETIC` with a
+disclaimer, using a sheet name (`SYNTHETIC-DEMO-SCHEDULE`) that can never be
+mistaken for a real DSH sheet.
+
+### 18.6 Test results
+
+| Suite | Command | Result |
+|---|---|---|
+| DIP fast (default) | `pytest -q` from the DIP directory | **94 passed**, 9 deselected (golden), <1s |
+| DIP golden | `pytest -q -m golden` | **9 passed** (3 new E0.4 extraction tests + 6 manifest tests against the real corpus), ~131s |
+| Root repo | `pytest -q` from repo root | **201 passed**, unchanged, unaffected |
+| RES | not re-run this session | confirmed untouched via `git status` (no diff on `reference-systems/reference-engineering-system/`) — re-running its own suite would require standing up its Postgres dependency, outside this session's scope |
+
+### 18.7 Files
+
+New this session (Phase C): `src/dip/tablegrid/{__init__,grid,models}.py`,
+`src/dip/extract/{__init__,assignment,header_scope,normalize,build}.py`,
+`scripts/run_render_scale_experiment.py`,
+`tests/fixtures/e04_ground_truth.json`,
+`tests/golden/test_e04_extraction_against_ground_truth.py`,
+`tests/unit/{test_grid,test_assignment,test_header_scope,test_normalize,test_confidence_provenance}.py`.
+Modified: `src/dip/config.py` (grid-detection constants, E0.4 identity
+constants, render-scale decision + comment), `src/dip/provenance.py`
+(`ocr_engine` field, new `FieldProvenance` model), `src/dip/diff/models.py`
+(`EquipmentRow` corrected per §18.4), `src/dip/ocr/render.py` (scale
+parameter, backward compatible), `src/dip/ocr/engines/base.py` (`line_group`
+field), `src/dip/ocr/engines/tesseract_engine.py` (populates `line_group`),
+`pyproject.toml` (`numpy` core dependency), `README.md`.
+
+### 18.8 Known limitations / what remains deferred
+
+- Existing Supply Fan / Existing Return Fan / Conductors / Motor
+  Controller / Motor Disconnect / Notes columns — not extracted, by
+  approved v1 scope, not an oversight.
+- Grid row-band detection covers only ~59 of the table's ~60+ visible
+  rows on E0.4 (§18.4) — root cause not fully diagnosed.
+- `RENDER_SCALE` is left at 2.0 despite scale 4.0 measuring better raw OCR
+  quality, because `dip.tablegrid`'s thresholds aren't yet recalibrated for
+  a different pixel density — an open decision, not a silent one.
+- `OcrWord.line_group` is captured but not yet consumed by any
+  cross-validation logic.
+- No other sheet (E0.6, EE5.1, or any DSH document beyond E0.4) is
+  extracted — explicitly out of scope, per the approved decisions.
+- Phase E (promotion into RES — `CreateDrawingVersion`,
+  `RevisionCloud.source_evidence_ref`, the DSH→RES loader) remains fully
+  unstarted, pending its own narrow ADR, per the post-RES-5 reconciliation.
 

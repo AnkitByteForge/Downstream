@@ -54,3 +54,43 @@ class EvidenceRef(BaseModel):
     extraction_method: ExtractionMethod
     extractor_version: str = Field(min_length=1)
     extracted_at: datetime
+    ocr_engine: str | None = Field(
+        default=None,
+        description=(
+            "Which OCR engine produced this fact ('tesseract', 'rapidocr'), if any. "
+            "None for native_text/synthetic_fixture extraction, where no OCR engine "
+            "was involved. Optional and defaulted for backward compatibility with "
+            "every EvidenceRef constructed before Phase C (docs/adr-equivalent: "
+            "Phase C decision 11) — existing Phase A/B/D fixtures and artifacts "
+            "validate unchanged."
+        ),
+    )
+
+
+class FieldProvenance(BaseModel):
+    """Per-field confidence, kept as two separate numbers per the Phase C
+    design — never combined, averaged, or multiplied into one score.
+
+    ocr_confidence answers "how confidently was this text recognized?"
+    (the OCR engine's own reported score for the word(s) this field's value
+    came from). extraction_confidence answers "how confidently was this
+    word/cell assigned to this field?" (a property of the table-reconstruction
+    step — ruling-line boundary clarity and cell-assignment ambiguity — and is
+    computed independently of how confidently the OCR engine read the text).
+
+    This is deliberately NOT Downstream's CERTAIN/PROBABLE/POSSIBLE reasoning
+    tier (docs/reference/Downstream_Intelligence_Specification.md §7) — that
+    tier is computed later, from graph evidence, by the Reasoning Pipeline,
+    and is out of DIP's scope entirely.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    ocr_confidence: float | None = Field(
+        default=None, description="The OCR engine's own reported confidence for the source word(s), 0-100."
+    )
+    extraction_confidence: float | None = Field(
+        default=None,
+        description="How confidently the table-reconstruction step assigned that text to this field's cell, 0-100.",
+    )
+    evidence: EvidenceRef

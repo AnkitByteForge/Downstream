@@ -7,12 +7,11 @@ not a connector, not a new service boundary.** See
 architecture and `IMPLEMENTATION_STATUS.md` for how this fits the current
 build sequence.
 
-**Current scope: Phase A (manifest), Phase B (OCR benchmark), Phase D
-(deterministic synthetic revision diff) only.** Phase C (real structured
-extraction) and Phase E (promotion into the Reference Engineering System)
-are explicitly not implemented here — see the architecture doc for why, and
-`dip.diff` for the input/output contract Phase C will eventually need to
-satisfy.
+**Current scope: Phase A (manifest), Phase B (OCR benchmark), Phase C (real
+structured extraction — E0.4 New Unit block vertical slice only), Phase D
+(deterministic synthetic revision diff).** Phase E (promotion into the
+Reference Engineering System) is explicitly not implemented here — see the
+architecture doc for why.
 
 ## Why this lives here, not in `apps/` or `packages/`
 
@@ -81,6 +80,15 @@ python scripts/build_manifest.py ../../data/reference-projects/dsh-atascadero/ra
 # Phase B — benchmark Tesseract + RapidOCR against the 3 named pages (E0.4/E0.6/EE5.1)
 python scripts/run_ocr_benchmark.py
 
+# Phase B (implementation-order step 1) — render-scale comparison (2.0/4.0/6.0), both engines
+python scripts/run_render_scale_experiment.py
+
+# Phase C — extract the E0.4 New Unit block into structured, provenance-rich EquipmentRows
+python -c "from pathlib import Path; from dip.extract.build import extract_new_unit_rows; from dip.ocr.engines.tesseract_engine import TesseractEngine; from dip import config; rows = extract_new_unit_rows(config.DSH_RAW_DIR / config.E04_FILE_NAME, config.E04_PAGE_INDEX, config.E04_SHEET_LABEL, TesseractEngine(), scale=config.RENDER_SCALE); print(len(rows), 'rows')"
+
+# Phase D — synthetic revision diff demo
+python scripts/run_synthetic_diff_demo.py
+
 # Tests — fast default suite, no dependency on the real 250MB+ corpus
 python -m pytest -q
 
@@ -96,16 +104,40 @@ data/reference-projects/dsh-atascadero/
 └── derived/                      # DIP's own cache/output — gitignored (repo root .gitignore already excludes data/)
     ├── documents.json            # registry: document_id -> {file_name, page_count, ...}
     ├── page_manifest/<id>.json   # Phase A output, one file per document
-    ├── render_cache/<id>/<page>.png   # Phase B: one rendered page image, cached
-    └── ocr_benchmark/<run_id>/{results.json,results.md}   # Phase B output
+    ├── render_cache/<id>/<page>_s<scale>.png   # Phase B/C: one rendered page image, cached per scale
+    ├── ocr_benchmark/<run_id>/{results.json,results.md}   # Phase B output
+    └── render_scale_experiment/results.json    # Phase C step 1 output
 ```
+
+## Phase C — E0.4 New Unit block extraction
+
+Deterministic table reconstruction: rendered bitmap -> ruling-line grid
+detection (`dip.tablegrid`, classical projection-profile image analysis, no
+ML) -> OCR word-box cell assignment -> New Unit block header scoping ->
+normalization/validation -> `list[EquipmentRow]` (`dip.diff.models`), each
+field carrying full provenance (`dip.provenance.EvidenceRef` +
+`FieldProvenance`, with OCR confidence and extraction confidence kept as
+two separate numbers, never combined). Tesseract is the primary OCR engine;
+RapidOCR is invoked only as a per-cell fallback when a New Unit field cell
+comes back empty from Tesseract — never a second whole-page pass by
+default. Scope is deliberately narrow: identity (`tag`,
+`existing_designation`) plus the New Unit block's six columns
+(`fed_from_panel`, `breaker_rating`, `conduit`, `volts`, `fla`, `mca`) only
+— Existing Supply Fan / Existing Return Fan / Conductors / Motor
+Controller / Motor Disconnect / Notes are explicitly deferred. See
+`tests/golden/test_e04_extraction_against_ground_truth.py` for the
+real-data accuracy measurement (91.1% exact field match against an 8-row
+manually-transcribed ground truth, `tests/fixtures/e04_ground_truth.json`)
+and the implementation report for the full investigation.
 
 ## What is explicitly NOT here
 
-- No Phase C (real structured extraction from OCR output into typed rows) —
-  only its input/output contract is fixed, in `dip.diff.models`.
 - No Phase E (promotion into the Reference Engineering System) — no RES
   contact of any kind exists in this package.
+- No Equipment/Material/Asset RES entity, no CreateDrawingVersion, no RES
+  API calls, no Downstream event, no Kafka, no Neo4j, no commercial
+  reasoning — Phase C's output stays inside DIP, on disk, exactly like
+  every earlier phase's.
 - No new service, no API, no Kafka, no Neo4j, no Redis, no Docker Compose
   entry — this is a CLI/script tool, invoked manually, per the approved
   scope.
