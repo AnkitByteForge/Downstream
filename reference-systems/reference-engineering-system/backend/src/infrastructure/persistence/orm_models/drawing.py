@@ -50,3 +50,4 @@ class RevisionCloudModel(Base):
     area: Mapped[str] = mapped_column(String(100))
     delta_number: Mapped[int] = mapped_column(Integer)
     description: Mapped[str] = mapped_column(String(400))
+    source_evidence_ref: Mapped[str | None] = mapped_column(String(500), nullable=True)

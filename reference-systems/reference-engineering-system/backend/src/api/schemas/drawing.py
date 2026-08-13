@@ -9,6 +9,7 @@ class RevisionCloudOut(BaseModel):
     area: str
     delta_number: int
     description: str
+    source_evidence_ref: str | None = None
 
 
 class DrawingOut(BaseModel):

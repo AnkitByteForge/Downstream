@@ -13,3 +13,11 @@ class RevisionCloud:
     area: str
     delta_number: int
     description: str
+    source_evidence_ref: str | None = None
+    """Opaque pointer into an external evidence system (ADR-009) — e.g. a
+    Document Ingestion Pipeline reference. RES never parses, validates the
+    shape of, or derives meaning from this value; it is a citation RES
+    stores on the engineering-domain's behalf, not a fact RES owns.
+    Nullable and defaulted for backward compatibility with every
+    RevisionCloud constructed before ADR-009 (Meridian Tower's existing
+    seed data)."""

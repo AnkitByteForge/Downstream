@@ -87,7 +87,12 @@ class SqlAlchemyDrawingVersionRepository(DrawingVersionRepository):
             discipline_code=row.discipline_code,
             superseded_by_id=row.superseded_by_id,
             revision_clouds=[
-                RevisionCloud(area=c.area, delta_number=c.delta_number, description=c.description)
+                RevisionCloud(
+                    area=c.area,
+                    delta_number=c.delta_number,
+                    description=c.description,
+                    source_evidence_ref=c.source_evidence_ref,
+                )
                 for c in clouds
             ],
             location_ids=location_ids,
@@ -125,6 +130,7 @@ class SqlAlchemyDrawingVersionRepository(DrawingVersionRepository):
                     area=cloud.area,
                     delta_number=cloud.delta_number,
                     description=cloud.description,
+                    source_evidence_ref=cloud.source_evidence_ref,
                 )
             )
         for location_id in version.location_ids:
@@ -152,6 +158,7 @@ class SqlAlchemyDrawingVersionRepository(DrawingVersionRepository):
                     area=cloud.area,
                     delta_number=cloud.delta_number,
                     description=cloud.description,
+                    source_evidence_ref=cloud.source_evidence_ref,
                 )
             )
         self._session.flush()
