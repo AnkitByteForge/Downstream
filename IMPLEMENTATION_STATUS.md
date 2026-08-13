@@ -1563,3 +1563,109 @@ narrow, well-isolated question, not a broad "improve accuracy" one. Do not
 expand to E0.6/EE5.1 or Phase E until that is resolved or explicitly
 deferred.
 
+## 20. Phase E — DIP → Engineering Evidence Promotion (E.0–E.7)
+
+### 20.1 Status
+
+All seven sub-milestones complete and committed, in strict serial order,
+each independently tested before the next began:
+
+| Phase | Commit | Summary |
+|---|---|---|
+| E.0 | `6588141` | Persisted `structured_state` (JSON, keyed by document/page/extractor_version/ocr_engine/render_scale) |
+| E.1 | `6588141` | VALID-only derived filtering view (`dip.promote.filter`) |
+| E.2 | `d441c8b` | ADR-009 — RES creation API decision |
+| E.3 | `fcfa699` | `RevisionCloud.source_evidence_ref` (RES migration 0014) |
+| E.4 | `8dd64fb` | RES idempotent Drawing/DrawingVersion creation API (migration 0015, `client_credentials` OAuth2 grant) |
+| E.5 | `e94d301` | `dip.promote.res_client` — authenticated RES HTTP client |
+| E.6 | `004664a` | `dip.promote.build` — promotion orchestrator |
+| E.7 | *(this commit)* | Real E0.4 Rev A promoted end-to-end into a live RES instance |
+
+### 20.2 Migrations
+
+- `0014_revision_cloud_source_evidence_ref.py` — additive, nullable `source_evidence_ref` column on `drawing_version_revision_clouds`.
+- `0015_drawing_creation_uniqueness.py` — `UNIQUE(project_id, sheet_number)` on `drawings`, `UNIQUE(drawing_id, revision_label)` on `drawing_versions`. Verified against existing Meridian Tower seed data before writing (zero collisions).
+
+### 20.3 APIs added
+
+- `POST /rest/v1.0/projects/{project_id}/documents` — `CreateDrawing`, idempotent (200 on repeat, 201 on first creation).
+- `POST /rest/v1.0/projects/{project_id}/documents/{drawing_id}/versions` — `CreateDrawingVersion`, same idempotency posture. Always creates `DRAFT`; issuance remains the existing, unmodified RES-4B `PATCH .../issue`.
+- `POST /oauth/token` gains `grant_type=client_credentials` (additive; `authorization_code`/`refresh_token` unchanged) — the headless grant `docs/04` specifies for exactly this caller shape, flagged as a gap in ADR-009 and closed in E.4.
+
+### 20.4 Promotion flow (as built)
+
+```
+real E0.4 PDF (Rev A, page 373)
+  → extract_new_unit_rows(scale=2.0)         [Phase C, unchanged]
+  → StructuredStateSnapshot                   [E.0]
+  → persist_structured_state() / load_structured_state()
+  → valid_facts_view()                        [E.1 — VALID fields only]
+  → promote_snapshot()                        [E.6]
+      → ResPromotionClient.create_drawing()          [E.5 → E.4 API]
+      → ResPromotionClient.create_drawing_version()  [E.5 → E.4 API]
+      → append-only attempt record (derived/promotion_log/<doc_id>.jsonl)
+  → RES: Drawing(sheet_number="E0.4") + DrawingVersion(revision_label="Rev A")
+      each RevisionCloud.source_evidence_ref = "dip://document/<sha256>/page/373/field/<f>?row=<tag>"
+```
+
+Identity (`target_project_id`, `sheet_number`, `revision_label`) is always
+caller-supplied, never inferred from OCR-run metadata — a real drawing
+revision is domain knowledge, not something extractable from
+`extractor_version`/`ocr_engine`/`render_scale`.
+
+### 20.5 E0.7 real promotion — exact provenance
+
+- Source: `data/reference-projects/dsh-atascadero/raw/02_Main_Plans_Bldg_3319.pdf`, page 373 (0-indexed), sheet label "E0.4 - Air Handler Replacement Schedule".
+- Extraction: Tesseract, `RENDER_SCALE = 2.0` (the established baseline, unchanged by this milestone), 59/59 real rows.
+- Promoted: every field whose `field_validation` status is exactly `VALID` across all 59 rows — the 4 known-real AMBIGUOUS fields (`AH-9C.breaker_rating`, `AH-9C.mca`, `AH-K1.mca`, `AH-24CTA.mca`) confirmed excluded, both by unit test and by the golden test against the actual live promotion.
+- Target: a throwaway RES project ("DIP E0.4 Promotion Golden Test"), seeded idempotently by `reference-systems/reference-engineering-system/backend/scripts/seed_dip_promotion_test_client.py` — **not** a real "DSH-Atascadero" RES project; creating that second real project was explicitly out of this milestone's scope (E.4 was scoped to Drawing/DrawingVersion creation only, not Project creation).
+- **E0.4 has exactly one real revision in the corpus (Rev A).** This milestone promotes that one real revision as an initial `DRAFT`-then-created `DrawingVersion`. **No real revision diff/delta has been demonstrated** — the only revision-diff mechanism ever exercised (Phase D) uses the explicitly-labeled `SYNTHETIC: true` Rev A/B fixture, unchanged by this milestone, and must not be presented as real.
+
+### 20.6 Test results (final matrix)
+
+| Suite | Result |
+|---|---|
+| DIP fast | 211 passed, 18 deselected |
+| DIP golden | 18 passed (includes the 2 new E.7 tests, real corpus + real live RES subprocess) |
+| RES complete (unit/application/domain/contract/integration) | 183 passed |
+| Root repository | 201 passed |
+| Frontend typecheck (`tsc --noEmit`) | clean |
+| Frontend lint | clean |
+| E0.7 end-to-end | passing, including a cross-*process* rerun (two separate `pytest` invocations against the same seeded RES project) proving idempotency beyond a single test's in-process double-call |
+
+E.7's golden test runs RES as a genuinely separate OS process (RES's own
+`.venv`, `uvicorn api.main:app` on a loopback port) rather than an
+in-process import — DIP's own test process never imports SQLAlchemy or a
+Postgres driver; the only channel between the two is HTTP, verified both
+by outcome (RES's own GET API independently confirms the promoted rows)
+and structurally (a source-level scan confirms `dip/` never imports a
+database driver/ORM anywhere).
+
+### 20.7 Known limitations
+
+- No `Equipment`/`EquipmentTag` RES entity was introduced (by design, per ADR-009 — confirmed non-conflicting with ADR-007/ADR-008's identical prior decision).
+- `create_drawing`/`create_drawing_version`'s idempotency is check-then-insert backed by a DB UNIQUE constraint; a genuine *concurrent* double-submission race is not additionally detected-and-recovered inside the use case (it would surface as a database constraint error, never a silent duplicate) — acceptable because DIP's promotion orchestrator is a serial process with no concurrent writers by construction, documented as a scope boundary in the use case's own docstring, not an oversight.
+- No human review queue for AMBIGUOUS/INVALID/MISSING fields — they simply never promote; a future milestone would need to design that workflow (flagged, not built, in the original DIP → Engineering Evidence Promotion plan).
+- `structured_state`/`promotion_log` remain flat JSON/JSON-lines files, matching the existing DIP storage discipline at this corpus's scale (four documents) — not yet backed by object storage.
+- E.7's cross-process golden test requires RES's own `.venv` to exist and RES's Postgres test container to be running; it self-skips (never hard-fails) if either precondition is absent.
+
+### 20.8 Scope discipline confirmed
+
+Not implemented, per explicit instruction: Kafka, Neo4j, Graph Layer,
+`connector-procore`, `apps/ingestion-service`, any Downstream service, LLM/RAG,
+SAP, Reference Commercial System, human review queue, `Equipment` RES
+entity, E0.6, EE5.1, any document family beyond E0.4's New Unit block.
+
+**Note on repository state at the time of this work:** while E.2–E.7 were
+being implemented, a large amount of unrelated, uncommitted work
+belonging to exactly the excluded scope above (Kafka publisher,
+`connector-procore`, `apps/ingestion-service`, `reference-commercial-system/`,
+ADR-010 through ADR-017, edits to the root `pyproject.toml` and
+`infra/docker-compose.yml`) appeared in the working tree — evidently a
+separate, concurrent process. None of it was created, modified, or
+committed by this Phase E work; every commit above was staged by explicit
+file path, never `git add -A`, specifically to avoid any risk of bundling
+unrelated in-flight work into these commits. Flagged here for visibility,
+not resolved — worth confirming with whoever owns that other work before
+either side commits further.
+

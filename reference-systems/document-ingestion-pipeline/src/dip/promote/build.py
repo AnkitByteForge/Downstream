@@ -22,6 +22,7 @@ only a pointer back to it (ADR-009).
 from __future__ import annotations
 
 import json
+import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -46,6 +47,27 @@ def evidence_ref_uri(document_id: str, page_index: int, field_name: str, tag: st
     RevisionCloud.source_evidence_ref back to the exact evidence it came
     from."""
     return f"dip://document/{document_id}/page/{page_index}/field/{field_name}?row={tag}"
+
+
+_EVIDENCE_REF_PATTERN = re.compile(
+    r"^dip://document/(?P<document_id>[^/]+)/page/(?P<page_index>\d+)/field/(?P<field_name>[^?]+)\?row=(?P<tag>.+)$"
+)
+
+
+def parse_evidence_ref_uri(uri: str) -> dict[str, str | int]:
+    """The inverse of evidence_ref_uri -- proves the pointer RES stores is
+    genuinely resolvable back into DIP's own evidence identity (document_id,
+    page_index, field_name, tag), not just a visually plausible string. DIP
+    is the only party that ever calls this; RES never does (ADR-009)."""
+    match = _EVIDENCE_REF_PATTERN.match(uri)
+    if not match:
+        raise ValueError(f"Not a recognized DIP evidence_ref URI: {uri!r}")
+    return {
+        "document_id": match.group("document_id"),
+        "page_index": int(match.group("page_index")),
+        "field_name": match.group("field_name"),
+        "tag": match.group("tag"),
+    }
 
 
 def _revision_clouds_for_facts(

@@ -13,6 +13,7 @@ from dip.diff.models import EquipmentRow
 from dip.promote.build import (
     PromotionAttemptRecord,
     evidence_ref_uri,
+    parse_evidence_ref_uri,
     promote_snapshot,
     promotion_log_path,
 )
@@ -209,6 +210,20 @@ class TestDeterministicIdentityAndOrdering:
         assert evidence_ref_uri("deadbeef", 373, "fed_from_panel", "AH-9A") == (
             "dip://document/deadbeef/page/373/field/fed_from_panel?row=AH-9A"
         )
+
+    def test_parse_evidence_ref_uri_is_the_exact_inverse_of_evidence_ref_uri(self):
+        uri = evidence_ref_uri("deadbeef", 373, "fed_from_panel", "AH-9A")
+        parsed = parse_evidence_ref_uri(uri)
+        assert parsed == {
+            "document_id": "deadbeef",
+            "page_index": 373,
+            "field_name": "fed_from_panel",
+            "tag": "AH-9A",
+        }
+
+    def test_parse_evidence_ref_uri_rejects_an_unrecognized_string(self):
+        with pytest.raises(ValueError):
+            parse_evidence_ref_uri("not-a-dip-uri")
 
     def test_repeated_promotion_of_the_same_snapshot_sends_byte_identical_revision_clouds(self):
         snapshot = _snapshot([_row("AH-9C"), _row("AH-2B")])
