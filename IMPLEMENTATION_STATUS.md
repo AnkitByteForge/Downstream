@@ -1,6 +1,6 @@
 # Downstream — Implementation Status
 
-**Last updated:** 2026-08-12 (DIP Phase C Reliability/Calibration milestone — scale-aware grid detection, engineering-safe field validation, full failure classification against the real corpus; see §19)
+**Last updated:** 2026-08-13 (Reference Commercial System CS-1, Downstream Milestone 0 infra, and Downstream Milestone 1 ingestion path — connector-procore + ingestion-service + live RFI-214→Kafka acceptance test; see §21, §22, §23)
 **Purpose of this document:** a single reference for exactly what has been built so far, in what order, and why — so any future session (human or agent) can pick up work without re-deriving decisions already made. This file is a living status record, not a frozen design document; it does not belong in `/docs` and carries no architectural authority of its own. If it ever disagrees with `/docs`, `/docs` wins.
 
 ---
@@ -46,6 +46,26 @@ Every decision below traces back to the seven frozen documents in `/docs`, read 
 | `3bc9d27` | **RES-4C/D** — Design Changes register + detail frontend pages, `DesignChangeStatusBadge`, api client, canonical ASI-07 / DWG-E-1.1 seed + seed assertion test (see §15). |
 | `fa48f44` | **RES-4E** — design-changes API contract suite (`tests/contract/conftest.py`, `test_design_changes_api.py`) + the canonical ASI-07↔RFI-214 source link in the seed (see §16). |
 | *(this session — RES-4G, uncommitted)* | **RES-4G final verification + checkpoint** — full re-verification from a fresh schema at 127 tests + live API smoke, docs updated (see §16). |
+| `7748e52` | **RES-5C/F/G** — Schedule/Model Objects frontend, Playwright E2E suite, Docker verification. |
+| `53e2436` | **RES-5A/B/D/E** — ScheduleActivity + ModelObject backend, canonical seed, contract tests. |
+| `ef88f0c` | **DIP Phase A** — PDF manifest (page classification, provenance, idempotent). |
+| `672597b` | **DIP Phase B** — OCR benchmark (Tesseract vs. RapidOCR). |
+| `45983b6` | **DIP Phase D** — deterministic synthetic revision diff. |
+| `3c85dcd` | **DIP Phase C** — E0.4 New Unit block extraction (real structured evidence). |
+| `dce6006` | **DIP Phase C Reliability milestone** — scale-aware grid detection, engineering-safe validation (see §19). |
+| `6588141` | **DIP Phase E.0/E.1** — persisted `structured_state`, VALID-only derived view. |
+| `d441c8b` | **ADR-009** — defines the RES creation API for evidence promotion (Phase E.2). |
+| `fcfa699` | **DIP Phase E.3** — `RevisionCloud.source_evidence_ref` (RES migration 0014). |
+| `8dd64fb` | **DIP Phase E.4** — RES idempotent Drawing/DrawingVersion creation API (migration 0015, `client_credentials` OAuth2 grant). |
+| `e94d301` | **DIP Phase E.5** — authenticated RES promotion HTTP client. |
+| `004664a` | **DIP Phase E.6** — promotion orchestrator. |
+| `dfb2f6e` | **DIP Phase E.7** — real E0.4 Rev A promoted end-to-end into a live RES instance (see §20). |
+| `3ad4446` | **Reference Commercial System — CS-1** — foundational domain (Vendor/Contract/Commitment/PO lifecycle), independent FastAPI/Postgres system, ADR-010 through ADR-017 (see §21). |
+| `67914d9` | **Downstream Milestone 0 — infra half** — connector config store, artifact identity map, Kafka topic provisioning, Neo4j graph seed (engineering-side only, see §22). |
+| `098c50a` | **fix** — `docker-compose.yml` Kafka/Postgres/Neo4j startup gaps, `apps/*` build-context bug (see §22.3). |
+| `3829688` | **Downstream Milestone 1 — connector-procore**, first half of the ingestion path (see §23). |
+| `c9709f3` | **Downstream Milestone 1 — ingestion-service**, second half of the ingestion path (see §23). |
+| `a78846a` | **Downstream Milestone 1 acceptance test** — RFI-214 close through Kafka `trigger.detected`, live end to end (see §23.4). |
 
 ---
 
@@ -54,14 +74,16 @@ Every decision below traces back to the seven frozen documents in `/docs`, read 
 | Layer | Status |
 |---|---|
 | `docs/` | Frozen, unmodified, source of truth |
-| `apps/*` (16 services) | **Scaffold only** — folder structure, placeholder README/Dockerfile/pyproject.toml. Zero business logic, zero APIs, zero database code. This is Downstream's own service mesh — untouched by RES-1. |
-| `packages/*` (5 packages) | **Implemented** — real, tested Pydantic models and an ABC. This is Milestone 0 (Downstream's own shared contracts — not used by the Reference Engineering System, see §10.1). |
-| `infra/` | `docker-compose.yml` now wires the Reference Engineering System's three containers (db/backend/frontend); every other service entry is still scaffold-only, matching the blueprint. `mocks/Reference Engineering System/` was removed — superseded by `reference-systems/reference-engineering-system/` (see §10). `mocks/Reference Commercial System/` remains an empty placeholder. |
+| `apps/*` (16 services) | **Two services now real** — `connector-procore` and `ingestion-service` implement Downstream Milestone 1's ingestion path end to end (see §23). `approval-service`, `realtime-gateway`, `commercial-event-service`, `ledger-service`, `notification-service`, `synchronization-service`, `key-resolution-service`, `reasoning-pipeline`, `connector-sap`, `connector-email`, and the three deferred connector stubs (`connector-acc`, `connector-oracle`, `connector-erpnext`) remain **scaffold only** — folder structure, placeholder README/Dockerfile/pyproject.toml, zero business logic. `web/` remains route-stub folders only. |
+| `packages/*` (5 packages) | **Implemented** — real, tested Pydantic models and an ABC. This is Milestone 0's shared-contracts half (Downstream's own shared contracts — not used by the Reference Engineering System, see §10.1). |
+| `infra/` | `docker-compose.yml` wires the Reference Engineering System's three containers (db/backend/frontend), Kafka/operational-Postgres/Neo4j graph-db, one-shot `db-migrate`/`kafka-topics-init`/`graph-seed`/`register-connector-webhook` init services, and now `connector-procore`/`ingestion-service` with real build contexts (see §22.3). Every other `apps/*` compose entry is still scaffold-only. `mocks/Reference Engineering System/` was removed — superseded by `reference-systems/reference-engineering-system/` (see §10). `mocks/Reference Commercial System/` is a stale, unused placeholder — superseded by `reference-systems/reference-commercial-system/` (see §21), not itself updated. |
 | `reference-systems/reference-engineering-system/` | **RES-1 through RES-5 implemented** — FastAPI backend (Clean Architecture) + Next.js frontend, both real, both tested, both containerized and verified end to end. RES-3 adds Submittals (parent/child revisioning, ADR-004), a configuration-driven procurement-release gate (ADR-003), Submittal Packages (ADR-005, unused by seed data), Vendors, minimal Commitments, the spec-driven Submittal Register, and the Submittal Register/Detail + Specification Browser frontend pages. RES-4 adds the Design Change (ASI/CCD/Bulletin) family per ADR-007 — domain/lifecycle (RES-4A), backend surface (RES-4B), frontend register/detail (RES-4C), canonical ASI-07/DWG-E-1.1 seed (RES-4D), API contract suite + RFI-source link (RES-4E), project-isolation/scope-containment contracts (RES-4F), and RES-4G's final verification checkpoint — see §14, §15, §16. RES-5 adds ScheduleActivity/ModelObject per ADR-008 — read-only domain/backend surface + canonical `sched_3410` seed + contract tests (RES-5A/B/D/E), Schedule/Model Objects frontend registers (RES-5C), the system's first Playwright E2E suite (RES-5F), and Docker Compose verification (RES-5G) — see §17. |
-| Tests | 201 `packages/*` unit tests (unchanged) + **157 Reference Engineering System backend tests** (all tiers) passing against a freshly migrated, freshly seeded schema — including the seed assertion tests and the design-changes/submittals/schedule-activities/model-objects/project-isolation contract suites. Frontend: build + typecheck + lint clean, including the two new RES-5 routes. **12 Playwright E2E specs, all passing** (§17.10) — the first browser-automation coverage for this system. |
-| Downstream Milestone (per blueprint §9) | Milestone 0 complete. Milestones 1–5 not started — unaffected by this phase. |
+| Tests | 201 `packages/*` unit tests + **183 Reference Engineering System backend tests** (all tiers, per §20.6) + **155 Reference Commercial System (CS-1) tests** (§21) + **211 DIP fast / 18 DIP golden tests** (§20.6) + **9 `ingestion-service` tests / 21 `connector-procore` tests** (§23) + **1 live Milestone 1 acceptance test** (§23.4), each service's suite run independently per its own `pyproject.toml`/venv boundary (never merged into one shared root test run — see §23.4's note on module-name collisions). Frontend: RES build + typecheck + lint clean. **12 Playwright E2E specs, all passing** (§17.10). |
+| `reference-systems/reference-commercial-system/` | **CS-1 complete** — independent FastAPI/Postgres reference ERP (SAP/Oracle-shaped), Vendor/OrgScope/CostCode/Contract/Commitment/PurchaseOrder+POLine+POScheduleLine lifecycle state machines, OAuth2 `client_credentials` + human session auth, a SAP-realistic CSRF write ceremony, canonical Scenario A/B seed data, 155 tests passing. Shares no database/FKs/code with RES or Downstream (ADR-011). CS-2 onward (frontend, requisitions, deliveries, invoices, change orders, webhooks, rate limiting) **not started** — see §21. |
+| Downstream Milestone (per blueprint §9) | **Milestone 0 complete** (shared contracts + infra half — connector config store, artifact identity map, Kafka topics, Neo4j graph seed, see §22). **Milestone 1 complete** (connector-procore + ingestion-service + live RFI-214→Kafka `trigger.detected` acceptance test, see §23). **Milestone 2 (Key Resolution/Reasoning Pipeline) onward — not started.** `apps/key-resolution-service`, `apps/reasoning-pipeline`, and `apps/connector-sap` remain empty scaffolds. |
+| Neo4j graph (`graph-db` container) | Seeded, engineering-side only: RFI-214's real canonical graph (RFI, SpecSection, DrawingVersion, Location, Discipline nodes; `REFERENCES`/etc. edges), read live from the Reference Engineering System by `infra/scripts/seed_graph.py`. **No commercial nodes** (PO/Vendor/CostCode) exist in the graph — the seed script stops at the SpecSection boundary by design, since RES's real seeded RFI-214 has no `cost_code` populated and Key Resolution (which would bridge into commercial identities) has not started. |
 | Reference Engineering System Milestone (per RES-3 Plan v2 §3) | **RES-1 through RES-5 complete** — ScheduleActivity/ModelObject backend+frontend+seed+contract tests+Playwright+Docker all verified (§17). Field Issues remain unscoped — a flagged, unresolved documentation contradiction (§17.1). |
-| `reference-systems/document-ingestion-pipeline/` (DIP) | **New sibling subsystem, not a Downstream service, not a Reference Engineering System dependency** (see the DSH ingestion architecture + post-RES-5 reconciliation docs). Phase A (PDF manifest), Phase B (OCR benchmark, Tesseract vs. RapidOCR), Phase C (E0.4 New Unit block real extraction, this session), and Phase D (deterministic synthetic revision diff) implemented and tested. Phase E (promotion into RES) explicitly not started — see §18. |
+| `reference-systems/document-ingestion-pipeline/` (DIP) | **New sibling subsystem, not a Downstream service, not a Reference Engineering System dependency** (see the DSH ingestion architecture + post-RES-5 reconciliation docs). Phase A (PDF manifest), Phase B (OCR benchmark), Phase C (E0.4 New Unit block real extraction) + its Reliability/Calibration milestone (§19), Phase D (deterministic synthetic revision diff), and **Phase E.0 through E.7 (promotion into a live RES instance)** all implemented and tested — see §18, §19, §20. Real E0.4 Rev A is promoted end to end; no real revision *diff* has been demonstrated (only the synthetic Phase D fixture, explicitly labeled `SYNTHETIC: true`). |
 
 ---
 
@@ -193,15 +215,17 @@ Each package's own `pyproject.toml` was also updated from the Phase 1 placeholde
 
 ---
 
-## 6. What is explicitly NOT implemented yet
+## 6. What was NOT implemented yet, as of Phase 1/2 (historical snapshot — superseded, see §22/§23)
 
-- **No service logic** in any of the 16 `apps/*` directories — every `src/{domain,consumers,publishers,...}` folder is still empty (`.gitkeep` only).
-- **No database** — every `migrations/` folder (both per-service and `infra/migrations/`) is still an empty placeholder. No table has been created anywhere, per Milestone 0's explicit constraint.
-- **No APIs** — `approval-service/src/api/` and `realtime-gateway/src/api/` are empty; no FastAPI route exists anywhere in the repo.
-- **No event bus wiring** — Kafka is declared in `docker-compose.yml` but nothing publishes or consumes from it yet.
-- **No connector adapter logic** — `connector-procore`, `connector-sap`, `connector-email` have no `inbound/client/mapper/idempotency` code; the three deferred connectors (`connector-acc`, `connector-oracle`, `connector-erpnext`) remain stubs by design.
-- **No frontend** — `apps/web` has no actual page code, just the route-stub folder structure.
-- **No mocks running** — `mock-erp` still has empty `src/`. (`mock-engineering-system` no longer exists as a concept — superseded by the Reference Engineering System, §10.)
+**This section describes repository state immediately after Milestone 0's shared-contracts half (commit `8e05eef`).** It is kept verbatim below for historical continuity, but several of its claims are now false — `connector-procore` and `ingestion-service` gained real service logic, database migrations, an event-bus publisher, and (for `ingestion-service`) a real API surface in Downstream Milestone 1 (§23). Current, accurate status for Downstream's `apps/*` is in §3's table and §22/§23 below.
+
+- ~~**No service logic** in any of the 16 `apps/*` directories — every `src/{domain,consumers,publishers,...}` folder is still empty (`.gitkeep` only).~~ Now false for `connector-procore` and `ingestion-service` (§23); still true for the other 14.
+- ~~**No database**~~ Now false for `connector-procore` and `ingestion-service`, each of which has real migrations (§23); still true elsewhere in `apps/*`.
+- **No APIs** — `approval-service/src/api/` and `realtime-gateway/src/api/` are still empty. (`ingestion-service` gained its own `src/api/` in Milestone 1 as a deliberate, recorded deviation from the blueprint's original API-surface template — §23.2.)
+- ~~**No event bus wiring**~~ Now false — `ingestion-service` publishes real `trigger.detected` events to a real Kafka broker (§23.2, §23.4).
+- ~~**No connector adapter logic**~~ Now false for `connector-procore` (§23.1); still true for `connector-sap`/`connector-email`, and the three deferred connectors remain stubs by design.
+- **No frontend** — `apps/web` still has no actual page code, just the route-stub folder structure. Unchanged.
+- **No mocks running** — `mock-erp`'s placeholder is now moot; the real reference commercial system lives at `reference-systems/reference-commercial-system/` (§21), unrelated to the old `mocks/` scaffold.
 
 This section describes **Downstream's own** `apps/*`/`packages/*` only. The separate `reference-systems/reference-engineering-system/` subsystem has its own implementation status — see §10.9.
 
@@ -211,9 +235,9 @@ This section describes **Downstream's own** `apps/*`/`packages/*` only. The sepa
 
 | Milestone | Scope | Status |
 |---|---|---|
-| **0 — Foundational data layer** | Artifact identity map, connector config store, seeded Graph Layer, Event Bus provisioned with all ten topics | **Shared contracts done** (`packages/`); the artifact identity map, connector config store, and seeded graph themselves are service/infra work, not yet started |
-| **1 — Ingestion path** | Connector-Procore (against the mock), Ingestion & Normalization Service | Not started |
-| **2 — Reasoning** | Key Resolution, the five-stage Reasoning Pipeline, artifact snapshot cache, Connector-SAP's `fetchArtifactSnapshot` | Not started |
+| **0 — Foundational data layer** | Artifact identity map, connector config store, seeded Graph Layer, Event Bus provisioned with all ten topics | **Complete** — shared contracts (`packages/`, Phase 2) plus the infra half: connector config store + artifact identity map migrations, Kafka topic provisioning, and an engineering-side-only Neo4j graph seed (§22) |
+| **1 — Ingestion path** | Connector-Procore (against the Reference Engineering System), Ingestion & Normalization Service | **Complete** — `connector-procore` + `ingestion-service`, verified live end to end from a real RES RFI-214 close through a real Kafka `trigger.detected` publish (§23) |
+| **2 — Reasoning** | Key Resolution, the five-stage Reasoning Pipeline, artifact snapshot cache, Connector-SAP's `fetchArtifactSnapshot` | **Not started.** `apps/key-resolution-service`, `apps/reasoning-pipeline`, and `apps/connector-sap` remain empty scaffolds (`.gitkeep` only). |
 | **3 — Domain core** | Commercial Event Service (full state machine), Ledger Service, live Commercial State query | Not started |
 | **4 — Realtime and human approval** | Realtime Gateway, Approval Service, the three Milestone-1 frontend surfaces | Not started |
 | **5 — Synchronization, both tiers** | Sync Service against email, then SAP's full CSRF ceremony — the entire Reference Trace end to end | Not started |
@@ -1668,4 +1692,135 @@ file path, never `git add -A`, specifically to avoid any risk of bundling
 unrelated in-flight work into these commits. Flagged here for visibility,
 not resolved — worth confirming with whoever owns that other work before
 either side commits further.
+
+**Update (2026-08-13): resolved.** That concurrent work is the same work
+now committed and documented as CS-1 (§21), the Milestone 0 infra half
+(§22), and Milestone 1's ingestion path (§23) — `3ad4446`, `67914d9`,
+`098c50a`, `3829688`, `c9709f3`, `a78846a`. No conflict with Phase E's own
+commits materialized.
+
+---
+
+## 21. Reference Commercial System — CS-1 (commit `3ad4446`)
+
+**What it is:** an independent, real FastAPI/PostgreSQL reference ERP system playing the SAP/Oracle-shaped commercial-system-of-record role a future `connector-sap` will consume — the commercial-side counterpart to the Reference Engineering System. Lives at `reference-systems/reference-commercial-system/backend/`.
+
+### 21.1 Scope
+
+Vendor, `OrgScope`, `CostCode`, Contract, Commitment, PurchaseOrder/POLine/POScheduleLine, each with its own domain state machine (`domain/state_machines/`). OAuth2 `client_credentials` + human session auth. A SAP-realistic CSRF write ceremony (`infrastructure/csrf/store.py`) — modeling the real SAP OData posture `docs/04` describes, not a generic API-key scheme. Canonical Scenario A (INR, matching the frozen `docs/05` Reference Trace figures) and Scenario B (USD, matching `Canonical_Demo_Dataset.md`'s figures) seed data, both seeded through real domain transitions (never pre-set status), mirroring RES-1's own seed discipline (§10.5).
+
+**Explicitly out of scope for CS-1** (deferred to CS-2 through CS-8): frontend, requisitions, deliveries, invoices, change orders, webhooks, rate limiting.
+
+### 21.2 Architecture
+
+Same four-layer Clean Architecture split already proven in RES (`domain/application/infrastructure/api`), with its own `tests/architecture/test_layer_boundaries.py` enforcing the same "business rules never import FastAPI/SQLAlchemy" property. **ADR-011 records that this system shares no database, no foreign keys, and no code with the Reference Engineering System or Downstream** — every cross-system reference (e.g. a `cost_code` a `SpecSection` might one day reference) is a plain business key, never an FK, matching how two real, independently-operated enterprise systems actually integrate.
+
+ADR-009 (the RES creation API decision, §20.1) was independently claimed by DIP's concurrent Phase E work between this plan's approval and its implementation; this milestone's own ADRs are numbered ADR-010 through ADR-017 instead, with the renumbering itself recorded in ADR-010.
+
+### 21.3 Migrations
+
+Three migrations, applied to a freshly created, empty database and re-verified from scratch: `0001_vendors_and_cost_codes`, `0002_contracts_and_auth`, `0003_purchase_orders_and_commitments`.
+
+### 21.4 Tests
+
+**155 tests, passing twice in a row from a freshly migrated, empty schema** — unit/domain (entity validation, all four state machines' legal/illegal transitions), unit/application (use cases against in-memory fakes), integration (real Postgres, repositories, seed-data assertions), contract (`TestClient`, auth/CSRF, org-scope isolation, PO lifecycle API), and architecture (layer-boundary enforcement).
+
+### 21.5 What is explicitly NOT implemented yet
+
+No frontend. No requisitions, deliveries, or invoices. No change-order flow. No webhook dispatch (unlike RES-2's RFI webhook, nothing in this system pushes events out yet). No rate limiting. No `connector-sap` integration — this system is a standalone target a future connector would consume, and no such connector exists (`apps/connector-sap` remains an empty scaffold, confirmed by directory listing — only `.gitkeep` files under `src/{client,config,idempotency,inbound,mapper}`).
+
+---
+
+## 22. Downstream Milestone 0 — infra half (commits `67914d9`, `098c50a`)
+
+Milestone 0's shared-contracts half (`packages/*`) was already complete since Phase 2 (§5). This phase completes the rest of blueprint §9's Milestone 0 scope: the artifact identity map, the connector configuration store, a provisioned Event Bus, and a seeded Graph Layer.
+
+### 22.1 What was built (`67914d9`)
+
+- `infra/migrations/0001_connector_configuration.sql` — the connector config store table.
+- `infra/migrations/0002_artifact_identity_map.sql` — the artifact identity map table, created empty (no rows populated yet — populating it is Milestone 2/Key Resolution's job, not this milestone's).
+- `infra/scripts/provision_kafka_topics.py` — provisions all ten Event Bus topics named in `packages/event-contracts` (§5.3) against a real Kafka broker.
+- `infra/scripts/seed_graph.py` — seeds the Neo4j graph **by reading RFI-214's real data live from a running Reference Engineering System**, not by hardcoding values. Creates RFI, SpecSection, DrawingVersion, Location, and Discipline nodes and the edges between them (`RFI-[:REFERENCES]->SpecSection`, `RFI-[:REFERENCES]->DrawingVersion`, etc.).
+- `infra/scripts/register_res_webhook.py` — registers this stack's `connector-procore` as a real RES webhook subscriber (the RES-2 webhook mechanism, §11.5), rather than leaving the seeded placeholder target (`http://localhost:9999/webhook-sink`, §11.5) as the only subscriber.
+
+**A deliberate, recorded scope boundary:** the graph seed stops at the SpecSection boundary — no `PO`/`Vendor`/`CostCode` nodes are created, and none are fabricated. Two independent reasons, both recorded in the script's own docstring: (1) RES's real seeded RFI-214 record has `cost_code = null`, so there is no real cost code to bridge from; (2) even if one existed, resolving a `SpecSection` to a commercial `CostCode`/`PO`/`Vendor` identity is Key Resolution's job (Milestone 2), which has not started. This is a recorded deviation from the illustrative Reference Trace's fuller graph, not a silently narrowed implementation.
+
+### 22.2 Current Neo4j graph contents
+
+**Engineering-side only.** Confirmed by reading `seed_graph.py`: nodes created are `RFI`, `SpecSection`, `DrawingVersion`, `Location`, `Discipline` — all sourced from the real RES RFI-214 record. **No commercial nodes (PO, Vendor, CostCode) exist in the graph.** The script's own printed summary states this explicitly at seed time ("No PO/Vendor/CostCode nodes created (no real Reference Commercial System yet — by design)") — a claim that, as of CS-1 (§21), is now half-superseded (a real Reference Commercial System *does* exist) but the graph itself has not been re-seeded to bridge into it, since that bridging is Key Resolution's job, not this milestone's.
+
+### 22.3 Docker Compose fixes (`098c50a`)
+
+Found and fixed while actually bringing the full stack up, not assumed working from the compose file's prior text:
+
+- **Kafka (`event-bus`)** — `bitnami/kafka` had no pullable tag at any version (Bitnami moved its free catalog to `bitnamilegacy/*`); added the KRaft env vars the broker needs to start at all (previously unset), plus a second `EXTERNAL` listener so host-based tooling doesn't hang resolving Kafka's advertised-listener metadata to an internal-only hostname.
+- **Postgres (`operational-db`)** — `POSTGRES_HOST_AUTH_METHOD` was never set; `postgres:16` refuses to start uninitialized without a password or this.
+- **Neo4j (`graph-db`)** — `NEO4J_AUTH` was never set; `neo4j:5` refuses to start without it.
+- Added `db-migrate`, `kafka-topics-init`, `graph-seed`, `register-connector-webhook` as one-shot init services implementing this milestone's infra half.
+- `connector-procore`/`ingestion-service` switched from the single-string `build:` shorthand (which resolved to the nonexistent `infra/apps/...` path under plain invocation — the pre-existing `apps/*` bug flagged since §10.7) to explicit `context: ..` + `dockerfile: apps/.../Dockerfile`, and given real `environment`/`depends_on` entries now that both services have real content to run. **This closes the `apps/*` build-context gap for these two services specifically** — the same class of bug remains unfixed for the other 14 `apps/*` compose entries, which still have no real build content to expose it.
+
+### 22.4 How to verify this state yourself
+
+```bash
+docker compose -f infra/docker-compose.yml up -d --build
+# db-migrate, kafka-topics-init, graph-seed, register-connector-webhook run once and exit
+docker logs <graph-seed-container>
+# expect: RFI/SpecSection/DrawingVersion/Location/Discipline node counts,
+# and "No PO/Vendor/CostCode nodes created (no real Reference Commercial System yet — by design)"
+```
+
+---
+
+## 23. Downstream Milestone 1 — ingestion path (commits `3829688`, `c9709f3`, `a78846a`)
+
+**Task given:** implement Milestone 1 per blueprint §9 — `connector-procore` (against the real Reference Engineering System, not a separate mock) and the Ingestion & Normalization Service — proving the first live hop of the Reference Execution Trace: an RES engineering event reaching Kafka as a `trigger.detected` event.
+
+### 23.1 `connector-procore` (commit `3829688`)
+
+Inbound webhook receiver (`POST /connectors/procore/{project_id}`, blueprint §7 shape), a connector-level idempotency cache, RES OAuth2 `client_credentials` auth, a GET-back to RES for enrichment plus the additional spec/drawing/location resolution calls RES's real API requires beyond `docs/05`'s single-GET illustration, `EngineeringEventEnvelope` construction (`packages/envelope-schemas`), and a synchronous handoff to `ingestion-service`.
+
+**Two real deviations from the illustrative Reference Trace, recorded rather than silently matched:** RES's webhook signature header is `X-Signature` (not `X-Procore-Signature`), and `RFI.status` is uppercase `"CLOSED"`. A partial-scope RES credential is used deliberately (matching `docs/04`/`docs/05`'s own emphasis on this exact case, and the same partial-scope behavior already verified live in RES-1/RES-2 — §10.3, §11.1) — verified live that it cannot see `spec_sections` or `locations` at all, so those two reference lists are honestly empty on the resulting envelope; only `drawing_refs` (via the granted `"documents"` scope) resolves.
+
+21/21 tests passing (18 unit, 3 contract — the contract suite runs live against the real RES container).
+
+### 23.2 `ingestion-service` (commit `c9709f3`)
+
+A synchronous internal endpoint (`POST /internal/envelopes`) implementing `docs/03` Stage 2 / Reference Trace Phase 2 — receives the connector's `EngineeringEventEnvelope` alongside Downstream's own `project_id` (the envelope itself carries no `project_id` field, per `docs/03` §1's literal shape; this mirrors blueprint §7's URL-path-scoped webhook contract instead of adding an invented field). Validates, dedups on `(source_system, source_id, occurred_at)`, applies the event-worthiness filter, persists the `Trigger`, and publishes `trigger.detected` onto Kafka.
+
+`src/api/` was added to this service's scaffold — a deliberate, recorded deviation from blueprint §3's stated template rule (`api/` only for `approval-service`/`realtime-gateway`), required because blueprint §1's own architecture diagram draws a direct, non-bus arrow from the connector into Ingestion, which necessarily needs a synchronous endpoint to receive it.
+
+**Two bugs found and fixed while verifying against the real running stack:** `kafka-python-ng` has no `enable_idempotence` producer option (that's a librdkafka/confluent-kafka concept, not applicable here); and the dedup record was originally being written *before* the Kafka publish rather than after, which would have permanently swallowed a legitimate RES redelivery whose Kafka publish had transiently failed — now records dedup only once the publish itself succeeds.
+
+9/9 tests passing (6 unit, 3 contract — the contract suite runs live against real Postgres + Kafka).
+
+### 23.3 Migrations
+
+- `apps/ingestion-service/migrations/0001_triggers.sql` — the `triggers` table (`domain-models.Trigger`, §5.2).
+- `apps/ingestion-service/migrations/0002_ingestion_idempotency.sql` — the dedup-key table.
+- `apps/connector-procore/migrations/0001_connector_idempotency_cache.sql` — the connector-level idempotency cache table.
+
+### 23.4 Milestone 1 acceptance test (commit `a78846a`)
+
+`tests/e2e/test_milestone1_rfi214_chain.py` proves the full approved chain live: **RES RFI-214 close → webhook → connector-procore → RES GET-back → `EngineeringEventEnvelope` → ingestion-service → `Trigger` persisted → Kafka `trigger.detected`.** Also verifies redelivery idempotency — a byte-identical resend is ignored, no second `Trigger` is created.
+
+**Recorded limitation:** RES's canonical seed closes RFI-214 via a direct domain-transition call, not the `CloseRFI` use case that dispatches webhooks (§10.5) — RFI-214 is therefore already `CLOSED` (a terminal state) by the time this test runs, and RES has no endpoint to create a fresh RFI to close live. Modifying RES's seed to work around this was rejected: RES's own test suite treats "RFI-214 CLOSED" as a locked invariant, and RES is developed as an independent, parallel system (per its own stated design discipline, §10.1). Instead, this test constructs the exact thin webhook payload RES's own dispatcher would have produced, from RFI-214's real live data — every hop from there on (signature verification, idempotency, the real RES GET-back, envelope construction, ingestion, Postgres, Kafka) is fully live, not mocked.
+
+**Test isolation note:** the root `pyproject.toml` deliberately does **not** add `apps/connector-procore/tests` or `apps/ingestion-service/tests` to its shared `testpaths` — found live that both services' identically-named flat modules (`config`, `client`, `repository`, ...) collide in Python's module cache the instant both services' tests share one `pytest` process (this is fine inside Docker, where only one service's `src/` is ever on `PYTHONPATH` per container). Each service's tests run via its own separate `pytest` invocation, the same boundary RES already draws for the same reason.
+
+### 23.5 What is explicitly NOT implemented yet (Milestone 2 onward)
+
+Key Resolution, the five-stage Reasoning Pipeline, the artifact snapshot cache, `connector-sap`'s `fetchArtifactSnapshot`, Commercial Event Service, Ledger Service, Realtime Gateway, Approval Service, Synchronization Service, and every Milestone-1+ frontend surface remain **not started** — `apps/key-resolution-service`, `apps/reasoning-pipeline`, `apps/connector-sap`, `apps/commercial-event-service`, `apps/ledger-service`, `apps/realtime-gateway`, `apps/approval-service`, `apps/synchronization-service`, and `apps/web` all remain empty scaffolds (`.gitkeep` files only), confirmed by directory listing. Production cloud deployment has not been started — the stack runs only via local Docker Compose.
+
+### 23.6 How to verify this state yourself
+
+```bash
+# ingestion-service
+cd apps/ingestion-service && python -m pytest -q   # expected: 9 passed
+
+# connector-procore
+cd apps/connector-procore && python -m pytest -q   # expected: 21 passed
+
+# Milestone 1 acceptance test (requires the full stack up via docker-compose)
+python -m pytest tests/e2e/test_milestone1_rfi214_chain.py -q   # expected: passing
+```
 
