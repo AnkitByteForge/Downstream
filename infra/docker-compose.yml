@@ -96,6 +96,7 @@ services:
       timeout: 10s
       retries: 20
     volumes: ["graph-data:/data"]
+    ports: ["7687:7687"]  # host access for Milestone 2 contract/e2e tests (apps/key-resolution-service/tests)
     networks: [downstream-net]
 
   # ---------- Mocks (Connector Layer Validation) ----------

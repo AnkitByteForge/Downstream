@@ -127,6 +127,14 @@ def fetch_commercial_data(base_url: str, token: str) -> dict:
     return {"cost_codes": cost_codes, "pos_with_lines": pos_with_lines, "vendor_by_id": vendor_by_id}
 
 
+def is_csi_masterformat_with_standard_ref(cost_code: dict) -> bool:
+    """The one gate on whether a CostCode is even eligible for the
+    PROCURED_UNDER business-key match — pulled out as its own pure
+    function (no I/O) so the CSI-format-validation rule is directly unit
+    testable without a Neo4j instance."""
+    return cost_code["cost_code_format"] == "CSI_MASTERFORMAT" and bool(cost_code["standard_ref"])
+
+
 def seed_neo4j(uri: str, user: str, password: str, data: dict) -> dict:
     driver = GraphDatabase.driver(uri, auth=(user, password))
     try:
@@ -159,7 +167,7 @@ def _write_commercial_subgraph(tx, data: dict) -> dict:
         )
         summary["cost_codes"] += 1
 
-        if cc["cost_code_format"] != "CSI_MASTERFORMAT" or not cc["standard_ref"]:
+        if not is_csi_masterformat_with_standard_ref(cc):
             continue
 
         # Exact string-equality business-key match only -- no fuzzy/
