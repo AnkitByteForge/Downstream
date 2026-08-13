@@ -155,6 +155,12 @@ EQUIPMENT_ROWS_DIR = DSH_DERIVED_DIR / "equipment_rows"
 # unrelated leftover constant.
 STRUCTURED_STATE_DIR = DSH_DERIVED_DIR / "structured_state"
 
+# --- Phase E.6: promotion attempt audit log --- append-only, one JSON-lines
+# file per document, per (approved plan §12: "the audit information belongs
+# to the promotion process," not a second system of record — RES's own rows
+# remain the system of record for the promoted facts themselves).
+PROMOTION_LOG_DIR = DSH_DERIVED_DIR / "promotion_log"
+
 # Tesseract binary location. PATH is not assumed — see README's
 # "Tesseract setup" section for why. Overridable via DIP_TESSERACT_CMD.
 TESSERACT_CMD_ENV_VAR = "DIP_TESSERACT_CMD"
