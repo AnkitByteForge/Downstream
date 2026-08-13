@@ -7,6 +7,7 @@ volumes:
   postgres-data:
   graph-data:
   reference-engineering-db-data:
+  reference-commercial-db-data:
 
 services:
   # ---------- Infrastructure ----------
@@ -142,6 +143,29 @@ services:
       NEXT_PUBLIC_API_BASE_URL: http://localhost:8000
     depends_on: [reference-engineering-backend]
     ports: ["3100:3000"]
+    networks: [downstream-net]
+
+  # ---------- Reference Commercial System (own subsystem, not a Downstream
+  # service — Milestone 2 packaging only; CS-1's own domain/application/
+  # API/schema code is unmodified, mirrored here exactly the way
+  # reference-engineering-* is wired above). ----------
+  reference-commercial-db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: cs
+      POSTGRES_PASSWORD: cs
+      POSTGRES_DB: reference_commercial
+    volumes: ["reference-commercial-db-data:/var/lib/postgresql/data"]
+    networks: [downstream-net]
+
+  reference-commercial-backend:
+    build: ../reference-systems/reference-commercial-system/backend
+    environment:
+      CS_DATABASE_URL: postgresql+psycopg://cs:cs@reference-commercial-db:5432/reference_commercial
+      CS_JWT_SECRET: dev-secret-change-me
+      CS_CORS_ORIGINS: '["http://localhost:3200"]'
+    depends_on: [reference-commercial-db]
+    ports: ["8001:8000"]
     networks: [downstream-net]
 
   # ---------- Milestone 0 infra bootstrap (one-shot, run once per fresh environment) ----------
