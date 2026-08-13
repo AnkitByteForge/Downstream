@@ -361,8 +361,26 @@ services:
     networks: [downstream-net]
 
   key-resolution-service:
-    build: ./apps/key-resolution-service
-    depends_on: [event-bus, graph-db]
+    build:
+      context: ..
+      dockerfile: apps/key-resolution-service/Dockerfile
+    environment:
+      KEY_RESOLUTION_OPERATIONAL_DATABASE_URL: postgresql://postgres@operational-db:5432/downstream_operational
+      KEY_RESOLUTION_KAFKA_BOOTSTRAP_SERVERS: event-bus:9092
+      KEY_RESOLUTION_NEO4J_URI: bolt://graph-db:7687
+      KEY_RESOLUTION_NEO4J_USER: neo4j
+      KEY_RESOLUTION_NEO4J_PASSWORD: downstream-dev
+    depends_on:
+      event-bus:
+        condition: service_healthy
+      operational-db:
+        condition: service_healthy
+      graph-db:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
+      kafka-topics-init:
+        condition: service_completed_successfully
     networks: [downstream-net]
 
   reasoning-pipeline:

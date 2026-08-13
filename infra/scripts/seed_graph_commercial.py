@@ -183,12 +183,15 @@ def _write_commercial_subgraph(tx, data: dict) -> dict:
         tx.run(
             """
             MERGE (p:PurchaseOrder {rcs_id: $rcs_id})
-            SET p.po_number = $po_number, p.currency = $currency, p.status = $status
+            SET p.po_number = $po_number, p.currency = $currency, p.status = $status,
+                p.company_code = $company_code, p.plant = $plant
             """,
             rcs_id=po["id"],
             po_number=po["po_number"],
             currency=po["currency"],
             status=po["status"],
+            company_code=po["org_scope"].get("company_code"),
+            plant=po["org_scope"].get("plant"),
         )
         summary["purchase_orders"] += 1
 
