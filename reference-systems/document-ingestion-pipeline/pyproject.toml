@@ -8,6 +8,10 @@ dependencies = [
     "pillow>=12,<13",
     "pydantic>=2,<3",
     "numpy>=2,<3",
+    # E.5: dip.promote.res_client's default transport -- the one new
+    # dependency this milestone genuinely requires (an HTTP client to call
+    # RES's API), not infrastructure added ahead of need.
+    "requests>=2,<3",
 ]
 
 [project.optional-dependencies]
