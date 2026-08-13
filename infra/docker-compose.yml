@@ -10,16 +10,69 @@ volumes:
 
 services:
   # ---------- Infrastructure ----------
+  # Pinned (was `:latest`) for reproducibility, per docs/07's own stated
+  # allowance ("swap any of them for an equivalent without it counting as
+  # an architectural change"). KRaft single-node mode (no ZooKeeper) — the
+  # env vars below were missing entirely before this milestone, so the
+  # broker had no way to actually start; this is the Milestone-0 "Event Bus
+  # provisioned" gap being closed, not a redesign.
+  #
+  # Image is `bitnamilegacy/kafka`, not `bitnami/kafka` (the blueprint's own
+  # choice, and this file's pre-existing value): verified directly against
+  # Docker Hub while bringing this stack up fresh — `bitnami/kafka` no
+  # longer resolves at ANY tag, including the `:latest` this file already
+  # had before this milestone (Bitnami restructured its free-tier image
+  # distribution onto the `bitnamilegacy/*` namespace). This is an external
+  # registry change, not a design decision; recorded here rather than
+  # silently swapped, since the frozen blueprint's own text names
+  # `bitnami/kafka:latest` specifically.
   event-bus:
-    image: bitnami/kafka:latest
+    image: bitnamilegacy/kafka:3.7
+    environment:
+      KAFKA_CFG_NODE_ID: "0"
+      KAFKA_CFG_PROCESS_ROLES: controller,broker
+      # Two data listeners, not one: PLAINTEXT for in-network service-to-
+      # service traffic (advertised as the Docker service name, per the
+      # frozen architecture — Kafka is purely an internal bus, never a
+      # host-facing surface), and EXTERNAL for host-based tooling (the
+      # Milestone 1 e2e acceptance test's own Kafka consumer, and any
+      # future manual debugging). Added while bringing this stack up for
+      # real: a single PLAINTEXT listener advertised as `event-bus:9092`
+      # bootstraps fine from the host (via the port mapping) but the
+      # client then hangs following Kafka's own metadata-returned broker
+      # address, which the host cannot resolve — the standard Kafka
+      # Docker dual-listener requirement, not a design change.
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://event-bus:9092,EXTERNAL://localhost:9094
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@event-bus:9093
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
     networks: [downstream-net]
-    ports: ["9092:9092"]
+    ports: ["9092:9092", "9094:9094"]
 
   operational-db:
     image: postgres:16
     environment:
       POSTGRES_DB: downstream_operational
+      # Was previously unset entirely — postgres:16 refuses to start
+      # uninitialized without either a password or this trust setting.
+      # Dev-only, matching this repo's existing posture on local secrets
+      # (e.g. RES's own hardcoded dev OAuth secrets); real deployments
+      # would use a real password/secrets manager, out of scope here.
+      POSTGRES_HOST_AUTH_METHOD: trust
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d downstream_operational"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
     volumes: ["postgres-data:/var/lib/postgresql/data"]
+    ports: ["5432:5432"]  # host access for the Milestone 1 e2e acceptance test (tests/e2e)
     networks: [downstream-net]
 
   ledger-db:
@@ -28,8 +81,19 @@ services:
       POSTGRES_DB: downstream_ledger
     networks: [downstream-net]
 
+  # NEO4J_AUTH was previously unset entirely, which the neo4j:5 image
+  # rejects at startup — another real Milestone-0 gap closed here (dev-only
+  # credential, consistent with this repo's existing posture of committed
+  # dev secrets for RES's own seeded OAuth clients).
   graph-db:
     image: neo4j:5
+    environment:
+      NEO4J_AUTH: neo4j/downstream-dev
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p downstream-dev 'RETURN 1' || exit 1"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
     volumes: ["graph-data:/data"]
     networks: [downstream-net]
 
@@ -80,10 +144,122 @@ services:
     ports: ["3100:3000"]
     networks: [downstream-net]
 
+  # ---------- Milestone 0 infra bootstrap (one-shot, run once per fresh environment) ----------
+  # Applies infra/migrations/*.sql plus each owning service's own
+  # migrations/*.sql (apps/ingestion-service, apps/connector-procore)
+  # against operational-db, in order, including the connector_configurations
+  # seed row. Plain SQL + psql, not a custom image — see
+  # infra/scripts/migrate.sh's own header comment for why.
+  db-migrate:
+    image: postgres:16
+    environment:
+      PGHOST: operational-db
+      PGUSER: postgres
+      PGDATABASE: downstream_operational
+    volumes:
+      - ./scripts/migrate.sh:/migrate.sh:ro
+      - ./migrations:/migrations/00-infra:ro
+      - ../apps/ingestion-service/migrations:/migrations/10-ingestion-service:ro
+      - ../apps/connector-procore/migrations:/migrations/20-connector-procore:ro
+      - ./scripts/seed_connector_configuration.sql:/migrations/90-seed/0001_seed_connector_configuration.sql:ro
+    entrypoint: ["sh", "/migrate.sh"]
+    depends_on:
+      operational-db:
+        condition: service_healthy
+    networks: [downstream-net]
+
+  # Provisions all ten frozen event-bus topics (blueprint §8) — Milestone 0's
+  # own "done when: the bus is up with no consumers yet" bar.
+  kafka-topics-init:
+    build:
+      context: ..
+      dockerfile: infra/scripts/Dockerfile
+    command: ["python", "provision_kafka_topics.py"]
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: event-bus:9092
+    depends_on:
+      event-bus:
+        condition: service_healthy
+    networks: [downstream-net]
+
+  # Seeds the Graph Layer's engineering-side key-index for RFI-214 by
+  # reading RES's own real, already-seeded data (never hardcoded values —
+  # see infra/scripts/seed_graph.py's module docstring for the recorded
+  # scope decision: no PO/Vendor/CostCode nodes, no Reference Commercial
+  # System dependency).
+  #
+  # Uses the FULL-scope RES client, deliberately different from
+  # connector-procore's own live, partial-scope one: this is the one-time
+  # calibration/indexing pass (docs/02 "Initial calibration": "Downstream
+  # ingests the project's existing documents once to build its internal
+  # key-index"), an admin/setup action distinct from the live per-webhook
+  # connector path. Verified live against the real seeded RES instance:
+  # the partial-scope credential (rfis, submittals, documents) cannot see
+  # spec_sections or locations at all (docs/04's silent-incomplete-data
+  # behavior — confirmed, not assumed), which would otherwise leave this
+  # seed missing its SpecSection/Location nodes entirely.
+  graph-seed:
+    build:
+      context: ..
+      dockerfile: infra/scripts/Dockerfile
+    command: ["python", "seed_graph.py"]
+    environment:
+      RES_BASE_URL: http://reference-engineering-backend:8000
+      RES_CLIENT_ID: downstream-full
+      RES_CLIENT_SECRET: full-scope-secret
+      NEO4J_URI: bolt://graph-db:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: downstream-dev
+    depends_on:
+      graph-db:
+        condition: service_healthy
+      reference-engineering-backend:
+        condition: service_started
+    networks: [downstream-net]
+    profiles: ["bootstrap"]  # run explicitly, after RES has been seeded (see README) — not on plain `up`
+
+  # One-time admin/setup action (docs/02: connecting systems is an
+  # onboarding-time step, not connector runtime logic) — registers
+  # connector-procore as the target for RES's RFI-close webhook.
+  register-connector-webhook:
+    build:
+      context: ..
+      dockerfile: infra/scripts/Dockerfile
+    command: ["python", "register_res_webhook.py"]
+    environment:
+      RES_BASE_URL: http://reference-engineering-backend:8000
+      RES_CLIENT_ID: downstream-partial
+      RES_CLIENT_SECRET: partial-scope-secret
+      CONNECTOR_PROCORE_BASE_URL: http://connector-procore:8080
+      RES_WEBHOOK_SECRET: seed-webhook-secret
+      DOWNSTREAM_PROJECT_ID: proj_meridian_tower
+    depends_on:
+      reference-engineering-backend:
+        condition: service_started
+      connector-procore:
+        condition: service_started
+    networks: [downstream-net]
+    profiles: ["bootstrap"]  # run explicitly, after RES has been seeded (see README) — not on plain `up`
+
   # ---------- Connectors (Milestone 1) ----------
   connector-procore:
-    build: ./apps/connector-procore
-    depends_on: [event-bus, reference-engineering-backend]
+    build:
+      context: ..
+      dockerfile: apps/connector-procore/Dockerfile
+    environment:
+      CONNECTOR_PROCORE_DATABASE_URL: postgresql://postgres@operational-db:5432/downstream_operational
+      CONNECTOR_PROCORE_INGESTION_SERVICE_URL: http://ingestion-service:8100
+      CONNECTOR_PROCORE_CONNECTION_ID: conn_res_meridian
+    ports: ["8080:8080"]
+    depends_on:
+      event-bus:
+        condition: service_healthy
+      reference-engineering-backend:
+        condition: service_started
+      db-migrate:
+        condition: service_completed_successfully
+      ingestion-service:
+        condition: service_started
     networks: [downstream-net]
 
   connector-sap:
@@ -114,8 +290,22 @@ services:
 
   # ---------- Core services ----------
   ingestion-service:
-    build: ./apps/ingestion-service
-    depends_on: [event-bus, operational-db]
+    build:
+      context: ..
+      dockerfile: apps/ingestion-service/Dockerfile
+    environment:
+      INGESTION_DATABASE_URL: postgresql://postgres@operational-db:5432/downstream_operational
+      INGESTION_KAFKA_BOOTSTRAP_SERVERS: event-bus:9092
+    ports: ["8100:8100"]
+    depends_on:
+      event-bus:
+        condition: service_healthy
+      operational-db:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
+      kafka-topics-init:
+        condition: service_completed_successfully
     networks: [downstream-net]
 
   key-resolution-service:
