@@ -43,15 +43,20 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture()
 def config() -> ConnectorConfiguration:
+    """Milestone 2 (approved remedy (a)): connector-procore's real deployed
+    configuration is now the full-scope RES credential, not Milestone 1's
+    partial-scope one — see infra/scripts/seed_connector_configuration.sql.
+    Key Resolution needs spec_section_refs populated, which the partial-scope
+    credential (verified live in M1) cannot see."""
     return ConnectorConfiguration(
         connection_id="conn_res_meridian",
         project_id="proj_meridian_tower",
         source_system="procore",
         base_url=RES_BASE_URL,
         oauth_token_url=f"{RES_BASE_URL}/oauth/token",
-        oauth_client_id="downstream-partial",
-        oauth_client_secret="partial-scope-secret",
-        granted_scope=["rfis", "submittals", "documents"],
+        oauth_client_id="downstream-full",
+        oauth_client_secret="full-scope-secret",
+        granted_scope=["*"],
         integration_tier="read_only",
         webhook_secret="seed-webhook-secret",
     )
@@ -84,17 +89,14 @@ def test_can_fetch_and_resolve_rfi_214(config):
     assert full_rfi["closed_at"] is not None
 
     resolved = client.resolve_rfi_references(project_id, full_rfi)
-    # Verified live against the real seeded RES instance, not assumed from
-    # the illustrative Reference Trace: the seeded partial-scope credential
-    # (rfis, submittals, documents) does NOT include "spec_sections" or
-    # "locations" — RES's own ctx.can_see() returns [] for both, silently,
-    # per docs/04's designed behavior for an under-provisioned credential.
-    # "documents" IS granted, so drawing_refs resolves correctly. This is a
-    # recorded, real deviation from the illustrative trace (which assumes
-    # all three resolve for this exact credential) — see the Milestone 1
-    # report's Known Limitations section.
-    assert resolved.spec_section_numbers == []
-    assert resolved.location_names == []
+    # Milestone 2: with the full-scope credential, all three reference lists
+    # resolve — matching the illustrative Reference Trace's assumption,
+    # unlike Milestone 1's partial-scope credential (verified live then to
+    # silently drop spec_sections/locations; see test_rfi_mapper.py's
+    # dedicated tests for that behavior, still exercised there against a
+    # manually-constructed partial config).
+    assert resolved.spec_section_numbers == ["23 31 13"]
+    assert resolved.location_names == ["Grid B-4"]
     assert ("M-2.1", "Rev C") in resolved.drawing_refs
 
 

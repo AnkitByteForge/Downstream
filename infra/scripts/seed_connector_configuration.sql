@@ -1,12 +1,21 @@
--- Milestone 0 seed row — the one connector configuration Milestone 1 needs:
--- connector-procore's connection to the Reference Engineering System, using
--- RES's own seeded partial-scope OAuth client (meridian_tower.py:
--- client_id="downstream-partial", client_secret="partial-scope-secret",
--- scope=["rfis","submittals","documents"]). Deliberately the partial-scope
--- client, not the full-scope one — this exercises the
--- acting_credential_scope="partial:[...]" path docs/04/05 identify as the
--- single highest-value real-world behavior to get right, for free, since RES
--- already has it seeded.
+-- Milestone 0 seed row, updated for Milestone 2 (approved remedy (a)):
+-- connector-procore's connection to the Reference Engineering System now
+-- uses RES's seeded FULL-scope OAuth client (meridian_tower.py:
+-- client_id="downstream-full", client_secret="full-scope-secret",
+-- integration_user_id=full_scope_integration -> PermissionScope.full()).
+--
+-- Why changed from Milestone 1's downstream-partial: verified live during
+-- M1 that the partial-scope credential (scope=["rfis","submittals",
+-- "documents"]) cannot see spec_sections at all, so the real Trigger's
+-- spec_section_refs was always []  — Key Resolution (Milestone 2) has
+-- nothing to resolve against without it. This is a one-row config change,
+-- not a new grant type and not a connector redesign: connector-procore's
+-- own OAuth client_credentials logic and its
+-- _acting_credential_scope_wire_value() mapper already handle a "*"
+-- granted_scope correctly (implemented in Milestone 1, unmodified here) —
+-- it already emits acting_credential_scope="full" when granted_scope
+-- contains RES's own PermissionScope.FULL_SCOPE_MARKER ("*"), the same
+-- sentinel RES itself uses internally.
 --
 -- source_system is recorded as 'procore' (not 'reference-engineering-system')
 -- because the EngineeringEventEnvelope.source_system convention documented
@@ -22,6 +31,10 @@
 -- constant ("seed-webhook-secret") — a dev-only credential already
 -- committed in cleartext in RES's own seed script; reusing the same known
 -- value here rather than inventing a second one to manage.
+--
+-- ON CONFLICT ... DO UPDATE (not DO NOTHING, as in Milestone 1): this row
+-- must actually change on re-run against an environment that was already
+-- seeded under Milestone 1's downstream-partial row, not just be skipped.
 
 INSERT INTO connector_configurations (
     connection_id, project_id, source_system, base_url, oauth_token_url,
@@ -33,10 +46,13 @@ INSERT INTO connector_configurations (
     'procore',
     'http://reference-engineering-backend:8000',
     'http://reference-engineering-backend:8000/oauth/token',
-    'downstream-partial',
-    'partial-scope-secret',
-    '["rfis","submittals","documents"]',
+    'downstream-full',
+    'full-scope-secret',
+    '["*"]',
     'read_only',
     'seed-webhook-secret'
 )
-ON CONFLICT (connection_id) DO NOTHING;
+ON CONFLICT (connection_id) DO UPDATE SET
+    oauth_client_id = EXCLUDED.oauth_client_id,
+    oauth_client_secret = EXCLUDED.oauth_client_secret,
+    granted_scope = EXCLUDED.granted_scope;

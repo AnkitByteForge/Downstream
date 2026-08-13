@@ -230,16 +230,17 @@ def test_full_milestone1_chain_rfi214_close_to_kafka():
     assert trigger is not None
     assert trigger["project_id"] == DOWNSTREAM_PROJECT_ID
     assert trigger["type"] == "RFI_APPROVED"
-    # Verified live, not assumed from the illustrative trace: connector-procore's
-    # seeded partial-scope RES credential (rfis, submittals, documents) cannot
-    # see spec_sections or locations at all (RES's own ctx.can_see() silently
-    # returns [] for both, per docs/04's designed under-provisioned-credential
-    # behavior) — only "documents" is granted, so drawing_refs is the one
-    # reference list that actually resolves for this real credential. Recorded
-    # deviation from the illustrative trace; see the Milestone 1 report.
-    assert trigger["spec_section_refs"] == []
+    # Milestone 2 (approved remedy (a)): connector-procore now uses RES's
+    # full-scope credential (infra/scripts/seed_connector_configuration.sql),
+    # not Milestone 1's partial-scope one — verified live in M1 to silently
+    # drop spec_sections/locations. All three reference lists now resolve.
+    # This assumes a genuinely fresh environment (a "deduped" outcome against
+    # a stale pre-Milestone-2 environment would return an old Trigger row
+    # still carrying the empty lists) — the documented verification
+    # procedure always brings the stack up from `docker compose down -v`.
+    assert trigger["spec_section_refs"] == ["23 31 13"]
     assert {"item_id": "M-2.1", "version_id": "Rev C"} in trigger["drawing_refs"]
-    assert trigger["location_refs"] == []
+    assert trigger["location_refs"] == ["Grid B-4"]
     assert trigger["status"] == "PENDING_RESOLUTION"
 
     kafka_message = _consume_trigger_detected(trigger_id)
