@@ -18,3 +18,19 @@ testpaths = [
     "packages/connector-interface/tests",
     "packages/shared-config/tests",
 ]
+# apps/connector-procore/tests and apps/ingestion-service/tests are
+# deliberately NOT added here, matching the precedent the Reference
+# Engineering System already established (IMPLEMENTATION_STATUS.md §10.8:
+# "this system has its own separate pyproject.toml/pytest config, not
+# merged into the root one, since it's a fully independent subsystem").
+# Found while verifying this milestone against a live stack, not assumed:
+# every apps/* service's src/ tree uses the SAME flat top-level module
+# names (config, client, repository, ...) per the blueprint's own §3
+# per-service template — fine in Docker, where only one service's src/ is
+# ever on PYTHONPATH per process, but a real Python module-cache collision
+# ("config.settings" resolving to whichever service's tests imported it
+# FIRST) the instant two services' tests share one pytest process. Each
+# service's own tests are run via its own separate `pytest` invocation
+# instead (see the Milestone 1 report's "how to verify this state
+# yourself" section) — the same boundary RES already draws for the same
+# reason.
