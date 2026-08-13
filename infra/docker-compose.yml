@@ -242,6 +242,34 @@ services:
     networks: [downstream-net]
     profiles: ["bootstrap"]  # run explicitly, after RES has been seeded (see README) — not on plain `up`
 
+  # Milestone 2 — seeds the Graph Layer's commercial-side key-index
+  # (CostCode/PurchaseOrder/POLine/Vendor) by reading RCS's own real,
+  # already-seeded data. Run after graph-seed (engineering side must exist
+  # first for the PROCURED_UNDER business-key match to find anything) and
+  # after RCS has been migrated + seeded. Uses RCS's real, org-scope-bound
+  # full-scope client (company_code "1000" — Scenario A only, by
+  # construction, per ADR-012's isolation guarantee, not a special case in
+  # this script).
+  graph-seed-commercial:
+    build:
+      context: ..
+      dockerfile: infra/scripts/Dockerfile
+    command: ["python", "seed_graph_commercial.py"]
+    environment:
+      RCS_BASE_URL: http://reference-commercial-backend:8000
+      RCS_CLIENT_ID: downstream-full-scope
+      RCS_CLIENT_SECRET: demo-client-secret
+      NEO4J_URI: bolt://graph-db:7687
+      NEO4J_USER: neo4j
+      NEO4J_PASSWORD: downstream-dev
+    depends_on:
+      graph-db:
+        condition: service_healthy
+      reference-commercial-backend:
+        condition: service_started
+    networks: [downstream-net]
+    profiles: ["bootstrap"]  # run explicitly, after RCS has been seeded (see README) — not on plain `up`
+
   # One-time admin/setup action (docs/02: connecting systems is an
   # onboarding-time step, not connector runtime logic) — registers
   # connector-procore as the target for RES's RFI-close webhook.
