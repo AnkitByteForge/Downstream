@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
 from domain.entities import (
+    Drawing,
+    DrawingVersion,
     DesignChange,
     Discipline,
     IntegrationUser,
@@ -29,6 +31,10 @@ from infrastructure.persistence.repositories.sqlalchemy_project_repository impor
 from infrastructure.persistence.repositories.sqlalchemy_rfi_repository import SqlAlchemyRFIRepository
 from infrastructure.persistence.repositories.sqlalchemy_design_change_repository import (
     SqlAlchemyDesignChangeRepository,
+)
+from infrastructure.persistence.repositories.sqlalchemy_drawing_repository import (
+    SqlAlchemyDrawingRepository,
+    SqlAlchemyDrawingVersionRepository,
 )
 from infrastructure.persistence.repositories.sqlalchemy_model_object_repository import (
     SqlAlchemyModelObjectRepository,
@@ -57,6 +63,9 @@ from infrastructure.persistence.repositories.sqlalchemy_webhook_repository impor
 from infrastructure.persistence.orm_models import (
     DesignChangeModel,
     DisciplineModel,
+    DrawingModel,
+    DrawingVersionModel,
+    RevisionCloudModel as RevisionCloudOrmModel,
     IntegrationUserModel,
     ModelObjectModel,
     OAuthClientModel,
@@ -567,6 +576,172 @@ def design_change_contract_fixture():
                 session.execute(
                     ProjectModel.__table__.delete().where(ProjectModel.id == oa.id)
                 )
+        session.commit()
+        session.close()
+
+
+@pytest.fixture()
+def drawing_creation_contract_fixture():
+    """Real, committed rows for the E.4 Drawing/DrawingVersion creation
+    contract tests (ADR-009) -- two isolated projects (cross-project
+    isolation), project A pre-seeded with one existing Drawing +
+    DrawingVersion (regression coverage for the existing GET routes, and a
+    natural-key collision target for the duplicate-creation tests), full-
+    and partial-scope credentials on project A, and a full-scope credential
+    on project B. Mirrors design_change_contract_fixture's shape."""
+    session = SessionLocal()
+    hasher = Pbkdf2PasswordHasher()
+    grade = {"tokens": [], "clients": [], "integration_users": []}
+    project_a = project_b = None
+    try:
+        discipline_repo = SqlAlchemyDisciplineRepository(session)
+        project_repo = SqlAlchemyProjectRepository(session)
+        drawing_repo = SqlAlchemyDrawingRepository(session)
+        version_repo = SqlAlchemyDrawingVersionRepository(session)
+        integration_repo = SqlAlchemyIntegrationUserRepository(session)
+        client_repo = SqlAlchemyOAuthClientRepository(session)
+        token_repo = SqlAlchemyOAuthTokenRepository(session)
+
+        discipline_repo.add(Discipline(code="DC", name="Drawing Creation Contract Discipline"))
+        project_a = project_repo.add(
+            Project(id=None, name="Drawing Creation Contract Project A", spec_format="MF2020")
+        )
+        project_b = project_repo.add(
+            Project(id=None, name="Drawing Creation Contract Project B", spec_format="MF2020")
+        )
+
+        existing_drawing = drawing_repo.add(
+            Drawing(
+                id=None,
+                project_id=project_a.id,
+                sheet_number="E0.4",
+                title="Existing Seeded Drawing",
+                discipline_code="DC",
+            )
+        )
+        existing_version = version_repo.add(
+            DrawingVersion(
+                id=None,
+                drawing_id=existing_drawing.id,
+                revision_label="Rev A",
+                issuance_date=date(2026, 6, 1),
+                status="DRAFT",
+                discipline_code="DC",
+            )
+        )
+
+        def _credential(client_prefix, project_id, scope):
+            integration_user = integration_repo.add(
+                IntegrationUser(
+                    id=None,
+                    project_id=project_id,
+                    name=f"Drawing Creation Contract {client_prefix}",
+                    permission_scope=scope,
+                )
+            )
+            client = client_repo.add(
+                OAuthClient(
+                    client_id=client_prefix,
+                    client_secret_hash=hasher.hash("contract-test-secret"),
+                    integration_user_id=integration_user.id,
+                )
+            )
+            token = token_repo.add(
+                OAuthToken(
+                    access_token=f"{client_prefix}-access",
+                    refresh_token=f"{client_prefix}-refresh",
+                    client_id=client.client_id,
+                    expires_at=datetime.now(timezone.utc) + timedelta(hours=1),
+                )
+            )
+            grade["tokens"].append(token)
+            grade["clients"].append(client)
+            grade["integration_users"].append(integration_user.id)
+            return token.access_token
+
+        token_a_full = _credential("drawing-contract-full-a", project_a.id, PermissionScope.full())
+        token_a_partial = _credential(
+            "drawing-contract-partial-a", project_a.id, PermissionScope.partial("rfis")
+        )
+        token_b_full = _credential("drawing-contract-full-b", project_b.id, PermissionScope.full())
+
+        session.commit()
+
+        yield {
+            "project_a": project_a.id,
+            "project_b": project_b.id,
+            "existing_drawing_id": existing_drawing.id,
+            "existing_version_id": existing_version.id,
+            "token_a_full": token_a_full,
+            "token_a_partial": token_a_partial,
+            "token_b_full": token_b_full,
+        }
+    finally:
+        client_ids = [c.client_id for c in grade["clients"]]
+        session.execute(
+            RateLimitStateModel.__table__.delete().where(
+                RateLimitStateModel.client_id.in_(client_ids)
+            )
+        )
+        for tok in grade["tokens"]:
+            session.execute(
+                OAuthTokenModel.__table__.delete().where(OAuthTokenModel.client_id == tok.client_id)
+            )
+        for client in grade["clients"]:
+            session.execute(
+                OAuthClientModel.__table__.delete().where(OAuthClientModel.client_id == client.client_id)
+            )
+        for iu_id in grade["integration_users"]:
+            session.execute(
+                IntegrationUserModel.__table__.delete().where(IntegrationUserModel.id == iu_id)
+            )
+        project_ids = [oa.id for oa in (project_a, project_b) if oa is not None]
+        # Every DrawingVersion (seeded + any the tests themselves created)
+        # under either project's Drawings must be cleared, in FK order:
+        # revision clouds -> versions -> drawings.
+        drawing_ids = [
+            row[0]
+            for row in session.execute(
+                DrawingModel.__table__.select().with_only_columns(DrawingModel.id).where(
+                    DrawingModel.project_id.in_(project_ids)
+                )
+            )
+        ]
+        if drawing_ids:
+            version_ids = [
+                row[0]
+                for row in session.execute(
+                    DrawingVersionModel.__table__.select()
+                    .with_only_columns(DrawingVersionModel.id)
+                    .where(DrawingVersionModel.drawing_id.in_(drawing_ids))
+                )
+            ]
+            if version_ids:
+                session.execute(
+                    RevisionCloudOrmModel.__table__.delete().where(
+                        RevisionCloudOrmModel.version_id.in_(version_ids)
+                    )
+                )
+            session.execute(
+                DrawingVersionModel.__table__.update()
+                .where(DrawingVersionModel.drawing_id.in_(drawing_ids))
+                .values(superseded_by_id=None)
+            )
+            session.execute(
+                DrawingModel.__table__.update()
+                .where(DrawingModel.id.in_(drawing_ids))
+                .values(current_version_id=None)
+            )
+            session.execute(
+                DrawingVersionModel.__table__.delete().where(
+                    DrawingVersionModel.drawing_id.in_(drawing_ids)
+                )
+            )
+            session.execute(DrawingModel.__table__.delete().where(DrawingModel.id.in_(drawing_ids)))
+        for oa in (project_a, project_b):
+            if oa is not None:
+                session.execute(ProjectModel.__table__.delete().where(ProjectModel.id == oa.id))
+        session.execute(DisciplineModel.__table__.delete().where(DisciplineModel.code == "DC"))
         session.commit()
         session.close()
 

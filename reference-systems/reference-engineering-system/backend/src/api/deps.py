@@ -19,6 +19,8 @@ from application.use_cases.design_change_use_cases import (
     VoidDesignChange,
 )
 from application.use_cases.drawing_use_cases import (
+    CreateDrawing,
+    CreateDrawingVersion,
     GetDrawing,
     GetDrawingVersion,
     IssueDrawingVersion,
@@ -27,7 +29,11 @@ from application.use_cases.drawing_use_cases import (
 )
 from application.use_cases.location_use_cases import ListLocations
 from application.use_cases.model_object_use_cases import GetModelObject, ListModelObjects
-from application.use_cases.oauth_use_cases import IssueTokenFromAuthorizationCode, RefreshOAuthToken
+from application.use_cases.oauth_use_cases import (
+    IssueTokenFromAuthorizationCode,
+    IssueTokenFromClientCredentials,
+    RefreshOAuthToken,
+)
 from application.use_cases.project_use_cases import GetProject, ListProjects
 from application.use_cases.rfi_use_cases import CloseRFI, GetRFI, ListRFIs, RespondToRFI
 from application.use_cases.schedule_activity_use_cases import (
@@ -206,6 +212,18 @@ def get_list_spec_divisions(repo=Depends(get_spec_division_repo)) -> ListSpecDiv
 
 def get_list_spec_sections(repo=Depends(get_spec_section_repo)) -> ListSpecSections:
     return ListSpecSections(repo)
+
+
+def get_create_drawing(repo=Depends(get_drawing_repo)) -> CreateDrawing:
+    return CreateDrawing(repo)
+
+
+def get_create_drawing_version(
+    drawing_repo=Depends(get_drawing_repo),
+    version_repo=Depends(get_drawing_version_repo),
+    clock=Depends(get_clock),
+) -> CreateDrawingVersion:
+    return CreateDrawingVersion(drawing_repo, version_repo, clock)
 
 
 def get_list_drawings(repo=Depends(get_drawing_repo)) -> ListDrawings:
@@ -406,6 +424,16 @@ def get_refresh_oauth_token(
     clock=Depends(get_clock),
 ) -> RefreshOAuthToken:
     return RefreshOAuthToken(client_repo, token_repo, opaque_tokens, hasher, clock)
+
+
+def get_issue_token_from_client_credentials(
+    client_repo=Depends(get_oauth_client_repo),
+    token_repo=Depends(get_oauth_token_repo),
+    opaque_tokens=Depends(get_opaque_token_service),
+    hasher=Depends(get_password_hasher),
+    clock=Depends(get_clock),
+) -> IssueTokenFromClientCredentials:
+    return IssueTokenFromClientCredentials(client_repo, token_repo, opaque_tokens, hasher, clock)
 
 
 # ---------------------------------------------------------------------------

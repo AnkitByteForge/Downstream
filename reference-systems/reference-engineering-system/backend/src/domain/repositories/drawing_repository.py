@@ -18,6 +18,12 @@ class DrawingRepository(ABC):
     @abstractmethod
     def update(self, drawing: Drawing) -> Drawing: ...
 
+    @abstractmethod
+    def get_by_sheet_number(self, project_id: int, sheet_number: str) -> Drawing | None:
+        """Drawing's natural key (project_id, sheet_number) -- E.4's
+        idempotent-creation lookup (ADR-009)."""
+        ...
+
 
 class DrawingVersionRepository(ABC):
     @abstractmethod
@@ -31,3 +37,9 @@ class DrawingVersionRepository(ABC):
 
     @abstractmethod
     def update(self, version: DrawingVersion) -> DrawingVersion: ...
+
+    @abstractmethod
+    def get_by_drawing_and_label(self, drawing_id: int, revision_label: str) -> DrawingVersion | None:
+        """DrawingVersion's natural key (drawing_id, revision_label) --
+        E.4's idempotent-creation lookup (ADR-009)."""
+        ...

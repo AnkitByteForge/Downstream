@@ -38,6 +38,7 @@ export interface RevisionCloudOut {
   area: string;
   delta_number: number;
   description: string;
+  source_evidence_ref: string | null;
 }
 
 export interface DrawingOut {

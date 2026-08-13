@@ -255,6 +255,12 @@ class InMemoryDrawingRepository(DrawingRepository):
         self._rows[drawing.id] = drawing
         return drawing
 
+    def get_by_sheet_number(self, project_id: int, sheet_number: str) -> Drawing | None:
+        for d in self._rows.values():
+            if d.project_id == project_id and d.sheet_number == sheet_number:
+                return d
+        return None
+
 
 class InMemoryDrawingVersionRepository(DrawingVersionRepository):
     def __init__(self, seeded: list[DrawingVersion] | None = None) -> None:
@@ -276,4 +282,10 @@ class InMemoryDrawingVersionRepository(DrawingVersionRepository):
     def update(self, version: DrawingVersion) -> DrawingVersion:
         self._rows[version.id] = version
         return version
+
+    def get_by_drawing_and_label(self, drawing_id: int, revision_label: str) -> DrawingVersion | None:
+        for v in self._rows.values():
+            if v.drawing_id == drawing_id and v.revision_label == revision_label:
+                return v
+        return None
 

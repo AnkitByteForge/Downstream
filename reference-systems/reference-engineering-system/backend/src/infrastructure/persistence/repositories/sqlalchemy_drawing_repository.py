@@ -56,6 +56,14 @@ class SqlAlchemyDrawingRepository(DrawingRepository):
         self._session.flush()
         return _drawing_to_domain(row)
 
+    def get_by_sheet_number(self, project_id: int, sheet_number: str) -> Drawing | None:
+        row = self._session.execute(
+            select(DrawingModel).where(
+                DrawingModel.project_id == project_id, DrawingModel.sheet_number == sheet_number
+            )
+        ).scalar_one_or_none()
+        return _drawing_to_domain(row) if row else None
+
 
 class SqlAlchemyDrawingVersionRepository(DrawingVersionRepository):
     def __init__(self, session: Session) -> None:
@@ -163,3 +171,12 @@ class SqlAlchemyDrawingVersionRepository(DrawingVersionRepository):
             )
         self._session.flush()
         return self._to_domain(row)
+
+    def get_by_drawing_and_label(self, drawing_id: int, revision_label: str) -> DrawingVersion | None:
+        row = self._session.execute(
+            select(DrawingVersionModel).where(
+                DrawingVersionModel.drawing_id == drawing_id,
+                DrawingVersionModel.revision_label == revision_label,
+            )
+        ).scalar_one_or_none()
+        return self._to_domain(row) if row else None

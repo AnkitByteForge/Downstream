@@ -6,6 +6,8 @@ from api.deps import (
     ActingContext,
     ensure_resource_in_project,
     get_acting_context,
+    get_create_drawing,
+    get_create_drawing_version,
     get_get_drawing,
     get_get_drawing_version,
     get_issue_drawing_version,
@@ -13,9 +15,17 @@ from api.deps import (
     get_list_drawings,
 )
 from api.pagination import PageParams, paginate
-from api.schemas.drawing import DrawingOut, DrawingVersionOut, RevisionCloudOut
+from api.schemas.drawing import (
+    CreateDrawingIn,
+    CreateDrawingVersionIn,
+    DrawingOut,
+    DrawingVersionOut,
+    RevisionCloudOut,
+)
 from application.exceptions import NotFound
 from application.use_cases.drawing_use_cases import (
+    CreateDrawing,
+    CreateDrawingVersion,
     GetDrawing,
     GetDrawingVersion,
     IssueDrawingVersion,
@@ -23,6 +33,7 @@ from application.use_cases.drawing_use_cases import (
     ListDrawingVersions,
 )
 from domain.exceptions import InvalidTransition
+from domain.value_objects import RevisionCloud
 
 router = APIRouter(tags=["documents"])
 
@@ -56,6 +67,26 @@ def list_documents(
     page, total = paginate(use_case.execute(project_id), page_params)
     response.headers["X-Total"] = str(total)
     return [DrawingOut(**vars(d)) for d in page]
+
+
+@router.post("/projects/{project_id}/documents", response_model=DrawingOut)
+def create_document(
+    project_id: int,
+    body: CreateDrawingIn,
+    response: Response,
+    use_case: CreateDrawing = Depends(get_create_drawing),
+    ctx: ActingContext = Depends(get_acting_context),
+) -> DrawingOut:
+    """ADR-009/E.4: creates a Drawing in the given project, or returns the
+    existing one if (project_id, sheet_number) already exists (idempotent
+    retry -- 200, not a new 201). DIP is the first external, evidence-driven
+    caller of this route; the human frontend and the seed script remain the
+    other two ways a Drawing can exist."""
+    ctx.require_project(project_id)
+    ctx.require_scope("documents")
+    drawing, created = use_case.execute(project_id, body.sheet_number, body.title, body.discipline_code)
+    response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+    return DrawingOut(**vars(drawing))
 
 
 @router.get("/projects/{project_id}/documents/{drawing_id}", response_model=DrawingOut)
@@ -120,6 +151,45 @@ def get_document_version(
         # drawing and prove it belongs to this project.
         parent = get_use_case.execute(version.drawing_id)
         ensure_resource_in_project(parent.project_id, project_id)
+        return _version_out(version)
+    except NotFound as exc:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
+
+
+@router.post(
+    "/projects/{project_id}/documents/{drawing_id}/versions",
+    response_model=DrawingVersionOut,
+)
+def create_document_version(
+    project_id: int,
+    drawing_id: int,
+    body: CreateDrawingVersionIn,
+    response: Response,
+    use_case: CreateDrawingVersion = Depends(get_create_drawing_version),
+    get_drawing_use_case: GetDrawing = Depends(get_get_drawing),
+    ctx: ActingContext = Depends(get_acting_context),
+) -> DrawingVersionOut:
+    """ADR-009/E.4: creates a DRAFT DrawingVersion under an existing
+    Drawing, or returns the existing one if (drawing_id, revision_label)
+    already exists (idempotent retry -- 200, not a new 201). Never issues
+    the version and never dispatches a webhook -- issuance remains the
+    existing, separate PATCH .../issue endpoint below, unmodified."""
+    ctx.require_project(project_id)
+    ctx.require_scope("documents")
+    try:
+        drawing = get_drawing_use_case.execute(drawing_id)
+        ensure_resource_in_project(drawing.project_id, project_id)
+        clouds = [
+            RevisionCloud(
+                area=c.area,
+                delta_number=c.delta_number,
+                description=c.description,
+                source_evidence_ref=c.source_evidence_ref,
+            )
+            for c in body.revision_clouds
+        ]
+        version, created = use_case.execute(drawing_id, body.revision_label, body.discipline_code, clouds)
+        response.status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
         return _version_out(version)
     except NotFound as exc:
         raise HTTPException(status.HTTP_404_NOT_FOUND, str(exc)) from exc
